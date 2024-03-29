@@ -54,3 +54,6 @@ dkms.conf
 .bashrc
 .viminfo
 *.lic
+strace_out
+PVS-Studio.log
+report.tasks
