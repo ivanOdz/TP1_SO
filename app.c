@@ -1,6 +1,7 @@
 // This is a personal academic project. Dear PVS-Studio, please check it.
 // PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>        /* For mode constants */
 #include <fcntl.h>           /* For O_* constants */
@@ -8,7 +9,7 @@
 #include <sys/mman.h>
 
 
-#define SHMNAME "app_shm_memory"
+#define SHMNAME "/app_shm_memory"
 #define SHMSIZE 2000000
 #define SLAVESQTY 5
 
@@ -32,22 +33,21 @@ int main(int argc, char * argv[]) {
     int shmMemFd = shm_open(SHMNAME,  O_CREAT | O_RDWR | O_EXCL, 0600);
     if(shmMemFd < 0) {
         perror("Shared memory open error");
-        exit(SHMOPENERR)
+        exit(SHMOPENERR);
     }
     char shmbuff [SHMSIZE];
     if (ftruncate(shmMemFd, SHMSIZE) < 0) {
         exit(FTRUNCATEERR);
     }
-    //void *mmap(void addr[.length], size_t length, int prot, int flags, int fd, off_t offset);
     char * shmAddr;
     shmAddr = mmap(NULL, SHMSIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shmMemFd, 0);
     if (shmAddr == MAP_FAILED) {
         exit(MMAPERR);
     }
-    close(shmMemfd);
-    //       After the mmap() call has returned, the file descriptor, fd, can be closed immediately without
-    //       invalidating the mapping.
+    close(shmMemFd);
 
+    printf("%s\n",SHMNAME);
+    sleep(2);
 
     // Tengo que crear 2 PIPES por cada SLAVE, uno de escritura y otro de lectura.
 
@@ -64,7 +64,6 @@ int main(int argc, char * argv[]) {
 
     // Al final de programa, copio todo lo de la sharedMemory en un archivo resultado.txt.
 
-    //close(2)       Close the file descriptor allocated by shm_open(3) when it is no longer needed.
-    shm_unlink(shmpath);
+    shm_unlink(SHMNAME);
     exit(0);
 }
