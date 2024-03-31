@@ -60,3 +60,7 @@ dkms.conf
 strace_out
 PVS-Studio.log
 report.tasks
+cmake-build-debug
+.idea
+.cache
+.config
