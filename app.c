@@ -13,6 +13,9 @@
 #define SHMSIZE 2000000
 #define SLAVESQTY 5
 
+#define READ_END 0
+#define WRITE_END 1
+
 
 #define INSSUFICIENTARGS_ERR -1
 #define SHMOPEN_ERR -2
@@ -49,30 +52,30 @@ int main(int argc, char * argv[]) {
     }
     close(shmMemFd);
 
+    // Colocar mutex en primera posicion de la shm
+
     printf("%s\n",SHMNAME);
     sleep(2);
 
     // Tengo que crear 2 PIPES por cada SLAVE, uno de escritura y otro de lectura.
     // Tengo que crear los procesos SLAVES, mediante fork y execve, manejando los posibles errores en ambos casos.
-    int readpipefd[2];    //var temporal de fds del pipe de donde lee la respuesta app
-    int writepipefd[2];   //var temporal de fds del pipe donde app pasa argumentos al esclavo
+    int anspipefd[2];    //var temporal de fds del pipe de donde lee la respuesta app
+    int taskpipefd[2];   //var temporal de fds del pipe donde app pasa argumentos al esclavo
 
     int writefds[SLAVESQTY];    //var que recolecta todos los fds de escritura (app) de los pipes
     int readfds[SLAVESQTY];   //var que recolecta todos los fds de lectura (app) de los pipes
 
-
     pid_t cpid;
     for(int slave = 0; slave < SLAVESQTY; slave++) {
         //Creo los 2 pipes
-        if(pipe(readpipefd) < 0) {
+        if(pipe(taskpipefd) < 0) {
             perror("pipe");
             exit(PIPE_ERR);
         }
-        if(pipe(writepipefd) < 0) {
+        if(pipe(anspipefd) < 0) {
             perror("pipe");
             exit(PIPE_ERR);
         }
-
         cpid = fork();
         if (cpid < 0) {
             perror("fork");
@@ -80,17 +83,25 @@ int main(int argc, char * argv[]) {
         }
         if(cpid == 0) {
             // Dentro del hijo, cierro fds que no uso
-            close(writepipefd[1]);
-            close(readpipefd[0]);
+            close(READ_END);
+            close(WRITE_END);
+            close(anspipefd[0]);    //donde escribo, no me interesa leer
+            close(taskpipefd[1]);   //donde leo, no me interesa escribir
 
             // Acomodo los fds para que tomen el menor valor posible
-            dup(readpipefd[1]);
-            close(readpipefd[1]);
-            dup(writepipefd[0]);
-            close(writepipefd[0]);
+            dup(taskpipefd[0]);     // Tengo que duplicar ese primero ya que desde aca leo -> fd:0
+            close(taskpipefd[0]);   // Luego borro el original
+            dup(anspipefd[1]);      // Duplico para que el write me quede en fd:1
+            close(anspipefd[1]);    // Borro el original
 
-            //Llamo a execve, pasandole 2 archivos de base a procesar.
-            char * args1[] = {"./slave", argv[2*slave + 1], argv[2*slave + 2], NULL};
+            // Borro todas los fd de otros pipes.
+            for(int i = 0; i < slave; i++) {
+                close(writefds[i]);
+                close(readfds[i]);
+            }
+
+            //Llamo a execve.
+            char * args1[] = {"./slave", NULL};
             int err1 = execve(args1[0], args1, NULL);
 
             if(err1 < 0){
@@ -99,23 +110,22 @@ int main(int argc, char * argv[]) {
             }
         }
         // Cierro los fds que el padre no utiliza
-        close(writepipefd[0]);
-        close(readpipefd[1]);
+        close(taskpipefd[0]);
+        close(anspipefd[1]);
 
-        // Acomodo los fds para que tomen el menor valor posible
-        dup(writepipefd[1]);
-        close(writepipefd[1]);
+        // Acomodo los fds para que tomen el menor valor posible y los guardo
+        //writefds[slave] = dup(taskpipefd[1]);
+        //close(taskpipefd[1]);
 
-        // Guardo los fds que me interesan
-        readfds[slave] = readpipefd[0];
-        writefds[slave] = writepipefd[1];
+        readfds[slave] = dup(anspipefd[0]);
+        close(anspipefd[0]);
+        writefds[slave] = taskpipefd[1];
     }
 
     // A medida que los SLAVES escriben en el buffer de lectura, el cual app se queda "escuchando" mediante select,
     // app hace un read y escribe eso mismo en la shared memory (mediante getLine, liberar las lineas)
     // luego le da al hijo que retorno algo, otro path a otro archivo. Esto se realiza mediante tenga hijos que no
     // hayan retornado. Una vez que retornan todos los hijos, finaliza el procesamiento.
-
 
     // Al final de programa, copio todo lo de la sharedMemory en un archivo resultado.txt.
 
