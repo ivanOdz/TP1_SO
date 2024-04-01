@@ -30,18 +30,20 @@ int main(int argc, char *argv[]) {
     char *envpForHA = NULL;
     char *pathOfFileForHA;
     char algorithmResult[HA_RESULT_BYTES];
-    char buffer[BUFFER_SIZE];
-    int bufferBytes = 0;
+    char readBuffer[BUFFER_SIZE];
+    char writeBuffer[BUFFER_SIZE];
+    int readBufferBytes = 0;
+    int writeBufferBytes = 0;
 
     argvForHA[NUMBER_ARGV_HA-1] = NULL;
 
     do {
 
-        if (bufferBytes <= 1) {
+        if (readBufferBytes <= 1) {
 
-            bufferBytes = read(STDIN_FILENO, buffer, BUFFER_SIZE);
+            readBufferBytes = read(STDIN_FILENO, readBuffer, BUFFER_SIZE);
 
-            if (bufferBytes < 1) {
+            if (readBufferBytes < 1) {
 
                 status = EXIT_SUCCESS;
                 break;
@@ -50,9 +52,9 @@ int main(int argc, char *argv[]) {
 
         do { // Buscar próximo Path (se consumen de forma LIFO)
             
-            bufferBytes--;
+            readBufferBytes--;
 
-        } while (bufferBytes && buffer[bufferBytes] != ' ');
+        } while (readBufferBytes && readBuffer[readBufferBytes] != ' ');
 
         if (pipe(pipeFd) == ORDINARY_ERROR) {
 
@@ -67,7 +69,7 @@ int main(int argc, char *argv[]) {
             dup2(pipeFd[WRITE_END], STDOUT_FILENO); 
             close(pipeFd[WRITE_END]);
 
-            pathOfFileForHA = buffer + bufferBytes;
+            pathOfFileForHA = readBuffer + readBufferBytes;
             argvForHA[NUMBER_ARGV_HA-2] = pathOfFileForHA;
 
             if (execve(HASHING_ALGORITHM, argvForHA, envpForHA) == 0) {
@@ -88,7 +90,9 @@ int main(int argc, char *argv[]) {
 
             close(pipeFd[READ_END]);
 
-            write(algorithmResult, sizeof(algorithmResult), STDOUT_FILENO);
+            writeBufferBytes = sprintf(writeBuffer, "%.s_%d", sizeof(algorithmResult)-1, algorithmResult, getpid());
+
+            write(writeBuffer, writeBufferBytes, STDOUT_FILENO);
         }
         else {
 
