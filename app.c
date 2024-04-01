@@ -72,7 +72,6 @@ int main(int argc, char * argv[]) {
             perror("pipe");
             exit(PIPE_ERR);
         }
-        printf("Child %d", slave);
 
         cpid = fork();
         if (cpid < 0) {
@@ -92,7 +91,6 @@ int main(int argc, char * argv[]) {
 
             //Llamo a execve, pasandole 2 archivos de base a procesar.
             char * args1[] = {"./slave", argv[2*slave + 1], argv[2*slave + 2], NULL};
-            printf("Child %d", slave);
             int err1 = execve(args1[0], args1, NULL);
 
             if(err1 < 0){
