@@ -9,6 +9,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <string.h>
 
 #define MAP_LENGTH 2000000 //2MB
 
@@ -27,8 +28,8 @@ int main(int argc, char* argv[]) {
             perror("Unable to process shared memory handle");
             exit(1);
         }
-        int readlen = getline(&sharedMemHandle, &bufferSize, stdin);
-        sharedMemHandle[readlen-1] = 0;
+        read(fileno(stdin), sharedMemHandle, bufferSize);
+        sharedMemHandle[getLineLen(sharedMemHandle)] = 0;
         sharedMem = openShm(sharedMemHandle);
         free(sharedMemHandle);
     }
@@ -55,7 +56,6 @@ int getLineLen(char* string) {
 }
 
 char* openShm(char* handle) {
-    printf("%s\n", handle);
     int fd = shm_open(handle, O_RDWR, 0600);
     if (fd == -1) {
         perror("Error opening shared memory");

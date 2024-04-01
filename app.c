@@ -30,6 +30,7 @@
 size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex);
 
 int main(int argc, char * argv[]) {
+    setvbuf(stdout, NULL, _IONBF, 0);
     //Minimo tiene que tener 2 argumentos. El primero es el nombre del programa y el segundo es 1 archivo.
     if (argc < 2) {
         // Manejo de errores para cantidad de argumentos insuficientes
@@ -61,7 +62,8 @@ int main(int argc, char * argv[]) {
     char * shmBuffer = shmAddr + sizeof(sem_t);
     size_t offset = 0;
 
-    printf("%s\n",SHMNAME);
+    //fwrite(SHMNAME, strlen(SHMNAME), 1, stdout);
+    printf("%s\n", SHMNAME);
     sleep(2); 
 
     // Tengo que crear 2 PIPES por cada SLAVE, uno de escritura y otro de lectura.
