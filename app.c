@@ -7,6 +7,7 @@
 #include <fcntl.h>           /* For O_* constants */
 #include <unistd.h>
 #include <sys/mman.h>
+#include <semaphore.h>
 
 
 #define SHMNAME "/app_shm_memory"
@@ -52,10 +53,13 @@ int main(int argc, char * argv[]) {
     }
     close(shmMemFd);
 
-    // Colocar mutex en primera posicion de la shm
+    sem_t * mutex = (sem_t *) shmAddr;
+    sem_init(mutex, 1, 0);
+    char * shmBuffer = shmAddr + sizeof(sem_t);
+    size_t offset = 0;
 
     printf("%s\n",SHMNAME);
-    sleep(2);
+    sleep(2); 
 
     // Tengo que crear 2 PIPES por cada SLAVE, uno de escritura y otro de lectura.
     // Tengo que crear los procesos SLAVES, mediante fork y execve, manejando los posibles errores en ambos casos.
@@ -85,14 +89,14 @@ int main(int argc, char * argv[]) {
             // Dentro del hijo, cierro fds que no uso
             close(READ_END);
             close(WRITE_END);
-            close(anspipefd[0]);    //donde escribo, no me interesa leer
-            close(taskpipefd[1]);   //donde leo, no me interesa escribir
+            close(anspipefd[READ_END]);    //donde escribo, no me interesa leer
+            close(taskpipefd[WRITE_END]);   //donde leo, no me interesa escribir
 
             // Acomodo los fds para que tomen el menor valor posible
-            dup(taskpipefd[0]);     // Tengo que duplicar ese primero ya que desde aca leo -> fd:0
-            close(taskpipefd[0]);   // Luego borro el original
-            dup(anspipefd[1]);      // Duplico para que el write me quede en fd:1
-            close(anspipefd[1]);    // Borro el original
+            dup(taskpipefd[READ_END]);     // Tengo que duplicar ese primero ya que desde aca leo -> fd:0
+            close(taskpipefd[READ_END]);   // Luego borro el original
+            dup(anspipefd[WRITE_END]);      // Duplico para que el write me quede en fd:1
+            close(anspipefd[WRITE_END]);    // Borro el original
 
             // Borro todas los fd de otros pipes.
             for(int i = 0; i < slave; i++) {
@@ -110,16 +114,16 @@ int main(int argc, char * argv[]) {
             }
         }
         // Cierro los fds que el padre no utiliza
-        close(taskpipefd[0]);
-        close(anspipefd[1]);
+        close(taskpipefd[READ_END]);
+        close(anspipefd[WRITE_END]);
 
         // Acomodo los fds para que tomen el menor valor posible y los guardo
         //writefds[slave] = dup(taskpipefd[1]);
         //close(taskpipefd[1]);
 
-        readfds[slave] = dup(anspipefd[0]);
-        close(anspipefd[0]);
-        writefds[slave] = taskpipefd[1];
+        readfds[slave] = dup(anspipefd[READ_END]);
+        close(anspipefd[READ_END]);
+        writefds[slave] = taskpipefd[WRITE_END];
     }
 
     // A medida que los SLAVES escriben en el buffer de lectura, el cual app se queda "escuchando" mediante select,
@@ -129,6 +133,21 @@ int main(int argc, char * argv[]) {
 
     // Al final de programa, copio todo lo de la sharedMemory en un archivo resultado.txt.
 
+    char* texts[] = {"Hola que tal\n", "asdf\n", "qwertyoruiop\n", "asdf\n", "zxcv\n", "que embole\n", "otro string\n", "asdf\n", "qwer\n", "me harte chau\n"};
+    for(int i = 0; i < 10; i++) {
+        offset += shmWrite(shmBuffer, texts[i], mutex);
+    }
+    shmBuffer[offset] = 0;
+    sem_post(mutex);
+    printf("%s", shmBuffer);
     shm_unlink(SHMNAME);
     exit(0);
+}
+
+size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex){
+    size_t len = strlen(str);
+    memcpy(shmBuffer, str, len);
+    shmBuffer[len] = 1;              //not over
+    sem_post(mutex);
+    return len;
 }
