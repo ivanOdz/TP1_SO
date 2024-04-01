@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <semaphore.h>
+#include <string.h>
 
 
 #define SHMNAME "/app_shm_memory"
@@ -26,6 +27,8 @@
 #define FORK_ERR -6
 #define EXCECVE_ERR -7
 
+size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex);
+
 int main(int argc, char * argv[]) {
     //Minimo tiene que tener 2 argumentos. El primero es el nombre del programa y el segundo es 1 archivo.
     if (argc < 2) {
@@ -37,7 +40,7 @@ int main(int argc, char * argv[]) {
 
     // Creo la sharedMemory, y muestro su nombre por la stdout. Hago un wait por 2 segundos para esperar a que se
     // conecte un proceso vista. Caso contrario reanudo el programa sin inconveientes.
-    int shmMemFd = shm_open(SHMNAME,  O_CREAT | O_RDWR | O_EXCL, 0600);
+    int shmMemFd = shm_open(SHMNAME,  O_CREAT | O_RDWR, 0600);
     if(shmMemFd < 0) {
         perror("shm_open");
         exit(SHMOPEN_ERR);
