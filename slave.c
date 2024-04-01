@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
     int status;
     int pipeFd[2];
     char *argvForHA[NUMBER_ARGV_HA];
-    char *envpForHA = NULL;
+    char **envpForHA = NULL;
     char *pathOfFileForHA;
     char algorithmResult[HA_RESULT_BYTES];
     char readBuffer[BUFFER_SIZE];
@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
             
             readBufferBytes--;
 
-        } while (readBufferBytes && readBuffer[readBufferBytes] != ' ');
+        } while (readBufferBytes && readBuffer[readBufferBytes] != '\0');
 
         if (pipe(pipeFd) == ORDINARY_ERROR) {
 
@@ -69,7 +69,12 @@ int main(int argc, char *argv[]) {
         if (pid == FORK_CHILD) {
             
             close(pipeFd[READ_END]);
-            dup2(pipeFd[WRITE_END], STDOUT_FILENO); 
+
+            if (dup2(pipeFd[WRITE_END], STDOUT_FILENO) == 0) {
+
+                ordinaryErrorHandler(status);
+            }
+
             close(pipeFd[WRITE_END]);
 
             pathOfFileForHA = readBuffer + readBufferBytes;
@@ -93,9 +98,9 @@ int main(int argc, char *argv[]) {
 
             close(pipeFd[READ_END]);
 
-            writeBufferBytes = sprintf(writeBuffer, "%.s_%d", sizeof(algorithmResult)-1, algorithmResult, getpid());
+            writeBufferBytes = sprintf(writeBuffer, "%*s_%d", (int)sizeof(algorithmResult)-1, algorithmResult, getpid());
 
-            write(writeBuffer, writeBufferBytes, STDOUT_FILENO);
+            write(STDOUT_FILENO, writeBuffer, writeBufferBytes);
         }
         else {
 
