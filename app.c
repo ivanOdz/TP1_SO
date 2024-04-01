@@ -9,11 +9,15 @@
 #include <sys/mman.h>
 #include <semaphore.h>
 #include <string.h>
+#include <sys/select.h>
 
 
 #define SHMNAME "/app_shm"
 #define SHMSIZE 2000000
 #define SLAVESQTY 5
+#define INITIAL_TASKS 2
+#define BUFFER_SIZE 1024
+
 
 #define READ_END 0
 #define WRITE_END 1
@@ -28,6 +32,8 @@
 #define EXCECVE_ERR -7
 
 size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex);
+char * createSHM(char * name, size_t size);
+void sendSlaveTask(char * path, int fd);
 
 int main(int argc, char * argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -41,28 +47,12 @@ int main(int argc, char * argv[]) {
 
     // Creo la sharedMemory, y muestro su nombre por la stdout. Hago un wait por 2 segundos para esperar a que se
     // conecte un proceso vista. Caso contrario reanudo el programa sin inconveientes.
-    int shmMemFd = shm_open(SHMNAME,  O_CREAT | O_RDWR, 0600);
-    if(shmMemFd < 0) {
-        perror("shm_open");
-        exit(SHMOPEN_ERR);
-    }
-    if (ftruncate(shmMemFd, SHMSIZE) < 0) {
-        exit(FTRUNCATE_ERR);
-    }
-    char * shmAddr;
-    shmAddr = mmap(NULL, SHMSIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shmMemFd, 0);
-    if (shmAddr == MAP_FAILED) {
-        perror("mmap");
-        exit(MMAP_ERR);
-    }
-    close(shmMemFd);
+    char * shmAddr = createSHM(SHMNAME, SHMSIZE);
 
     sem_t * mutex = (sem_t *) shmAddr;
     sem_init(mutex, 1, 0);
     char * shmBuffer = shmAddr + sizeof(sem_t);
     size_t offset = 0;
-
-    //fwrite(SHMNAME, strlen(SHMNAME), 1, stdout);
     printf("%s\n", SHMNAME);
     sleep(2); 
 
@@ -74,8 +64,10 @@ int main(int argc, char * argv[]) {
     int writefds[SLAVESQTY];    //var que recolecta todos los fds de escritura (app) de los pipes
     int readfds[SLAVESQTY];   //var que recolecta todos los fds de lectura (app) de los pipes
 
+    int filesAssigned = 0;
+
     pid_t cpid;
-    for(int slave = 0; slave < SLAVESQTY; slave++) {
+    for(int slave = 0; slave < SLAVESQTY && filesAssigned < argc - 1; slave++) {
         //Creo los 2 pipes
         if(pipe(taskpipefd) < 0) {
             perror("pipe");
@@ -129,6 +121,47 @@ int main(int argc, char * argv[]) {
         readfds[slave] = dup(anspipefd[READ_END]);
         close(anspipefd[READ_END]);
         writefds[slave] = taskpipefd[WRITE_END];
+        for (int i = 0; i < INITIAL_TASKS; i++){
+            if (filesAssigned < argc - 1)
+                sendSlaveTask(argv[++filesAssigned], writefds[slave]);
+        }
+    }
+
+    
+    fd_set set;
+    int filesProcessed = 0;
+    int maxFD = 0;
+    for (int i = 0; i < SLAVESQTY; i++){
+        if (readfds[i] > maxFD){
+            maxFD = readfds[i];
+        }
+    }
+    char resultBuffer[BUFFER_SIZE];
+
+    while (filesProcessed < argc) {
+        FD_ZERO(&set);
+        for (int i = 0; i < SLAVESQTY; i++){
+            FD_SET(readfds[i], &set);
+        }
+        select(maxFD + 1, &set, NULL, NULL, NULL);
+
+        for (int i = 0; i < SLAVESQTY; i++){
+            if (FD_ISSET(readfds[i], &set)){
+                ssize_t bytesread = read(readfds[i], resultBuffer, BUFFER_SIZE);
+                size_t written = 0;
+                while (written < bytesread){
+                    written += shmWrite(shmBuffer + offset + written, resultBuffer + written, mutex);
+                    filesProcessed++;
+                }
+                offset += written;
+                if (filesAssigned < argc) {
+                    sendSlaveTask(++filesAssigned, i);
+                } else {
+                    killSlave(i);
+                }
+            }
+        }
+        
     }
 
     // A medida que los SLAVES escriben en el buffer de lectura, el cual app se queda "escuchando" mediante select,
@@ -155,4 +188,27 @@ size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex){
     shmBuffer[len] = 1;              //not over
     sem_post(mutex);
     return len;
+}
+
+char * createSHM(char * shmName, size_t size){
+    int shmMemFd = shm_open(shmName,  O_CREAT | O_RDWR, 0600);
+    if(shmMemFd < 0) {
+        perror("shm_open");
+        exit(SHMOPEN_ERR);
+    }
+    if (ftruncate(shmMemFd, size) < 0) {
+        exit(FTRUNCATE_ERR);
+    }
+    char * shmAddr;
+    shmAddr = mmap(NULL, SHMSIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shmMemFd, 0);
+    if (shmAddr == MAP_FAILED) {
+        perror("mmap");
+        exit(MMAP_ERR);
+    }
+    close(shmMemFd);
+    return shmAddr;
+}
+
+void sendSlaveTask(char * path, int fd){
+    write(fd, path, strlen(path));
 }
