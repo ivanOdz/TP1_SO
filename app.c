@@ -34,6 +34,7 @@
 size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex);
 char * createSHM(char * name, size_t size);
 void sendSlaveTask(char * path, int fd);
+void createSlaves(int * readEndpoints, int * writeEndpoints, int amount);
 
 int main(int argc, char * argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -56,76 +57,13 @@ int main(int argc, char * argv[]) {
     printf("%s\n", SHMNAME);
     sleep(2); 
 
-    // Tengo que crear 2 PIPES por cada SLAVE, uno de escritura y otro de lectura.
-    // Tengo que crear los procesos SLAVES, mediante fork y execve, manejando los posibles errores en ambos casos.
-    int anspipefd[2];    //var temporal de fds del pipe de donde lee la respuesta app
-    int taskpipefd[2];   //var temporal de fds del pipe donde app pasa argumentos al esclavo
 
     int writefds[SLAVESQTY];    //var que recolecta todos los fds de escritura (app) de los pipes
     int readfds[SLAVESQTY];   //var que recolecta todos los fds de lectura (app) de los pipes
 
+    createSlaves(readfds, writefds, SLAVESQTY);
+    
     int filesAssigned = 0;
-
-    pid_t cpid;
-    for(int slave = 0; slave < SLAVESQTY && filesAssigned < argc - 1; slave++) {
-        //Creo los 2 pipes
-        if(pipe(taskpipefd) < 0) {
-            perror("pipe");
-            exit(PIPE_ERR);
-        }
-        if(pipe(anspipefd) < 0) {
-            perror("pipe");
-            exit(PIPE_ERR);
-        }
-        cpid = fork();
-        if (cpid < 0) {
-            perror("fork");
-            exit(FORK_ERR);
-        }
-        if(cpid == 0) {
-            // Dentro del hijo, cierro fds que no uso
-            close(READ_END);
-            close(WRITE_END);
-            close(anspipefd[READ_END]);    //donde escribo, no me interesa leer
-            close(taskpipefd[WRITE_END]);   //donde leo, no me interesa escribir
-
-            // Acomodo los fds para que tomen el menor valor posible
-            dup(taskpipefd[READ_END]);     // Tengo que duplicar ese primero ya que desde aca leo -> fd:0
-            close(taskpipefd[READ_END]);   // Luego borro el original
-            dup(anspipefd[WRITE_END]);      // Duplico para que el write me quede en fd:1
-            close(anspipefd[WRITE_END]);    // Borro el original
-
-            // Borro todas los fd de otros pipes.
-            for(int i = 0; i < slave; i++) {
-                close(writefds[i]);
-                close(readfds[i]);
-            }
-
-            //Llamo a execve.
-            char * args1[] = {"./slave", NULL};
-            int err1 = execve(args1[0], args1, NULL);
-
-            if(err1 < 0){
-                perror("execve");
-                exit(EXCECVE_ERR);
-            }
-        }
-        // Cierro los fds que el padre no utiliza
-        close(taskpipefd[READ_END]);
-        close(anspipefd[WRITE_END]);
-
-        // Acomodo los fds para que tomen el menor valor posible y los guardo
-        //writefds[slave] = dup(taskpipefd[1]);
-        //close(taskpipefd[1]);
-
-        readfds[slave] = dup(anspipefd[READ_END]);
-        close(anspipefd[READ_END]);
-        writefds[slave] = taskpipefd[WRITE_END];
-        for (int i = 0; i < INITIAL_TASKS; i++){
-            if (filesAssigned < argc - 1)
-                sendSlaveTask(argv[++filesAssigned], writefds[slave]);
-        }
-    }
 
     
     fd_set set;
@@ -211,4 +149,68 @@ char * createSHM(char * shmName, size_t size){
 
 void sendSlaveTask(char * path, int fd){
     write(fd, path, strlen(path));
+}
+
+void createSlaves(int * readfds, int * writefds, int amount){
+    // Tengo que crear 2 PIPES por cada SLAVE, uno de escritura y otro de lectura.
+    // Tengo que crear los procesos SLAVES, mediante fork y execve, manejando los posibles errores en ambos casos.
+    int anspipefd[2];    //var temporal de fds del pipe de donde lee la respuesta app
+    int taskpipefd[2];   //var temporal de fds del pipe donde app pasa argumentos al esclavo
+
+    pid_t cpid;
+    for(int slave = 0; slave < SLAVESQTY; slave++) {
+        //Creo los 2 pipes
+        if(pipe(taskpipefd) < 0) {
+            perror("pipe");
+            exit(PIPE_ERR);
+        }
+        if(pipe(anspipefd) < 0) {
+            perror("pipe");
+            exit(PIPE_ERR);
+        }
+        cpid = fork();
+        if (cpid < 0) {
+            perror("fork");
+            exit(FORK_ERR);
+        }
+        if(cpid == 0) {
+            // Dentro del hijo, cierro fds que no uso
+            close(READ_END);
+            close(WRITE_END);
+            close(anspipefd[READ_END]);    //donde escribo, no me interesa leer
+            close(taskpipefd[WRITE_END]);   //donde leo, no me interesa escribir
+
+            // Acomodo los fds para que tomen el menor valor posible
+            dup(taskpipefd[READ_END]);     // Tengo que duplicar ese primero ya que desde aca leo -> fd:0
+            close(taskpipefd[READ_END]);   // Luego borro el original
+            dup(anspipefd[WRITE_END]);      // Duplico para que el write me quede en fd:1
+            close(anspipefd[WRITE_END]);    // Borro el original
+
+            // Borro todas los fd de otros pipes.
+            for(int i = 0; i < slave; i++) {
+                close(writefds[i]);
+                close(readfds[i]);
+            }
+
+            //Llamo a execve.
+            char * args1[] = {"./slave", NULL};
+            int err1 = execve(args1[0], args1, NULL);
+
+            if(err1 < 0){
+                perror("execve");
+                exit(EXCECVE_ERR);
+            }
+        }
+        // Cierro los fds que el padre no utiliza
+        close(taskpipefd[READ_END]);
+        close(anspipefd[WRITE_END]);
+
+        // Acomodo los fds para que tomen el menor valor posible y los guardo
+        //writefds[slave] = dup(taskpipefd[1]);
+        //close(taskpipefd[1]);
+
+        readfds[slave] = dup(anspipefd[READ_END]);
+        close(anspipefd[READ_END]);
+        writefds[slave] = taskpipefd[WRITE_END];
+    }
 }
