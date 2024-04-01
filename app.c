@@ -11,7 +11,7 @@
 #include <string.h>
 
 
-#define SHMNAME "/app_shm_memory"
+#define SHMNAME "/app_shm"
 #define SHMSIZE 2000000
 #define SLAVESQTY 5
 
@@ -138,11 +138,11 @@ int main(int argc, char * argv[]) {
 
     char* texts[] = {"Hola que tal\n", "asdf\n", "qwertyoruiop\n", "asdf\n", "zxcv\n", "que embole\n", "otro string\n", "asdf\n", "qwer\n", "me harte chau\n"};
     for(int i = 0; i < 10; i++) {
-        offset += shmWrite(shmBuffer, texts[i], mutex);
+        offset += shmWrite(shmBuffer + offset, texts[i], mutex);
     }
     shmBuffer[offset] = 0;
     sem_post(mutex);
-    printf("%s", shmBuffer);
+    //printf("%s", shmBuffer);
     shm_unlink(SHMNAME);
     exit(0);
 }

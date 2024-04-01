@@ -27,7 +27,8 @@ int main(int argc, char* argv[]) {
             perror("Unable to process shared memory handle");
             exit(1);
         }
-        getline(&sharedMemHandle, &bufferSize, stdin);
+        int readlen = getline(&sharedMemHandle, &bufferSize, stdin);
+        sharedMemHandle[readlen-1] = 0;
         sharedMem = openShm(sharedMemHandle);
         free(sharedMemHandle);
     }
@@ -41,7 +42,6 @@ int main(int argc, char* argv[]) {
         int lineLength = getLineLen(resultBuffer + offset);
         fwrite(resultBuffer + offset, lineLength, 1, stdout);
         offset += lineLength;
-        sleep(1);
     } while (resultBuffer[offset] != 0);
 
     munmap(sharedMem, MAP_LENGTH);
@@ -55,6 +55,7 @@ int getLineLen(char* string) {
 }
 
 char* openShm(char* handle) {
+    printf("%s\n", handle);
     int fd = shm_open(handle, O_RDWR, 0600);
     if (fd == -1) {
         perror("Error opening shared memory");
