@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
 
             writeBufferBytes = sprintf(writeBuffer, "%s - %.*s - %d\n", pathOfFileForHA, HA_RESULT_BYTES, algorithmResult, myPid);
 
-            write(STDOUT_FILENO, writeBuffer, writeBufferBytes);
+            write(STDOUT_FILENO, writeBuffer, writeBufferBytes + 1);
         }
         else {
             
