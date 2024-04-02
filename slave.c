@@ -9,8 +9,8 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-#define HASHING_ALGORITHM   "./md5sum"
-#define NUMBER_ARGV_HA      5
+#define HASHING_ALGORITHM   "/usr/bin/md5sum"
+#define NUMBER_ARGV_HA      4
 #define HA_RESULT_BYTES     33
 
 #define ORDINARY_ERROR      -1
@@ -42,7 +42,6 @@ int main(int argc, char *argv[]) {
 
     argvForHA[0] = HASHING_ALGORITHM;
     argvForHA[1] = "-z";
-    argvForHA[2] = "--quiet";
     argvForHA[NUMBER_ARGV_HA-1] = NULL;
 
     do {
@@ -50,7 +49,8 @@ int main(int argc, char *argv[]) {
         if (pendingReadBufferBytes <= 1) {
 
             pendingReadBufferBytes = read(STDIN_FILENO, readBuffer, sizeof(readBuffer));
-            readBuffer[pendingReadBufferBytes-1] = '\0';
+            pendingReadBufferBytes--;
+            readBuffer[pendingReadBufferBytes] = '\0';
 
             if (pendingReadBufferBytes < 1) {
 
@@ -69,6 +69,7 @@ int main(int argc, char *argv[]) {
                 
                 firstRead = 0;
             }
+            
         }
 
         if (pipe(pipeFd) == ORDINARY_ERROR) {
@@ -76,7 +77,8 @@ int main(int argc, char *argv[]) {
             ordinaryErrorHandler(status);
         }
 
-        cpid = fork();              // 0 (STD_IN) | 1 (WRITE) | 2 (STD_ERR) |
+        pathOfFileForHA = (char*)(readBuffer + pendingReadBufferBytes);
+        cpid = fork();
 
         if (cpid == FORK_CHILD) {
             
@@ -90,10 +92,7 @@ int main(int argc, char *argv[]) {
 
             close(pipeFd[WRITE_END]);
 
-            pathOfFileForHA = readBuffer + pendingReadBufferBytes;
             argvForHA[NUMBER_ARGV_HA-2] = pathOfFileForHA;
-            
-            printf("%s\n", pathOfFileForHA);
 
             if (execve(HASHING_ALGORITHM, argvForHA, envpForHA) < 0) {
 
@@ -113,7 +112,7 @@ int main(int argc, char *argv[]) {
 
             close(pipeFd[READ_END]);
 
-            writeBufferBytes = sprintf(writeBuffer, "%*s_%d", (int)sizeof(algorithmResult)-1, algorithmResult, myPid);
+            writeBufferBytes = sprintf(writeBuffer, "%s - %s - %d\n", pathOfFileForHA, algorithmResult, myPid);
 
             write(STDOUT_FILENO, writeBuffer, writeBufferBytes);
         }

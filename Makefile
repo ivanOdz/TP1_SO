@@ -6,7 +6,7 @@ app: app.c
 view: view.c
 	gcc -Wall $< -g -o $@
 
-slave: slave2.c
+slave: slave.c
 	gcc -Wall $< -g -o $@
 
 clean:
