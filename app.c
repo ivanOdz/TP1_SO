@@ -30,12 +30,14 @@
 #define PIPE_ERR -5
 #define FORK_ERR -6
 #define EXCECVE_ERR -7
+#define DUP_ERR -8
 
 size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex);
 char * createSHM(char * name, size_t size);
 void sendSlaveTask(char * path, int fd);
 void createSlaves(int * readEndpoints, int * writeEndpoints, int amount);
 void killSlave(int * readfds, int * writefds, int slave);
+int Dup(int oldfd);
 
 int main(int argc, char * argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -196,9 +198,9 @@ void createSlaves(int * readfds, int * writefds, int amount){
             close(taskpipefd[WRITE_END]);   //donde leo, no me interesa escribir
 
             // Acomodo los fds para que tomen el menor valor posible
-            dup(taskpipefd[READ_END]);     // Tengo que duplicar ese primero ya que desde aca leo -> fd:0
+            Dup(taskpipefd[READ_END]);     // Tengo que duplicar ese primero ya que desde aca leo -> fd:0
             close(taskpipefd[READ_END]);   // Luego borro el original
-            dup(anspipefd[WRITE_END]);      // Duplico para que el write me quede en fd:1
+            Dup(anspipefd[WRITE_END]);      // Duplico para que el write me quede en fd:1
             close(anspipefd[WRITE_END]);    // Borro el original
 
             // Borro todas los fd de otros pipes.
@@ -222,7 +224,7 @@ void createSlaves(int * readfds, int * writefds, int amount){
 
         // Acomodo los fds para que tomen el menor valor posible y los guardo
 
-        readfds[slave] = dup(anspipefd[READ_END]);
+        readfds[slave] = Dup(anspipefd[READ_END]);
         close(anspipefd[READ_END]);
         writefds[slave] = taskpipefd[WRITE_END];
     }
@@ -233,4 +235,13 @@ void killSlave(int * readfds, int * writefds, int slave) {
     close(writefds[slave]);
     readfds[slave] = -1;
     writefds[slave] = -1;
+}
+
+int Dup(int oldfd) {
+    int newfd = dup(oldfd);
+    if(newfd < 0) {
+        perror("dup");
+        exit(DUP_ERR);
+    }
+    return newfd;
 }
