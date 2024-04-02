@@ -15,7 +15,7 @@
 #define SHMNAME "/app_shm"
 #define SHMSIZE 2000000
 #define SLAVESQTY 5
-#define INITIAL_TASKS 1
+#define INITIAL_TASKS 3
 #define BUFFER_SIZE 1024
 
 
@@ -108,7 +108,7 @@ int main(int argc, char * argv[]) {
                     int temp = shmWrite(shmBuffer + offset, resultBuffer + written, mutex);
                     written += temp + 1;
                     filesProcessed++;
-                    offset += temp;
+                    offset += temp + 1;
                 }
                 if (filesAssigned < argc - 1) {
                     sendSlaveTask(argv[++filesAssigned], writefds[i]);
@@ -165,7 +165,7 @@ char * createSHM(char * shmName, size_t size){
 }
 
 void sendSlaveTask(char * path, int fd){
-    write(fd, path, strlen(path));
+    write(fd, path, strlen(path) + 1);
 }
 
 void createSlaves(int * readfds, int * writefds, int amount){
