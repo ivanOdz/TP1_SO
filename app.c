@@ -163,7 +163,7 @@ char * createSHM(char * shmName, size_t size){
 }
 
 void sendSlaveTask(char * path, int fd){
-    write(fd, path, strlen(path) + 1);
+    write(fd, path, strlen(path));
 }
 
 void createSlaves(int * readfds, int * writefds, int amount){
