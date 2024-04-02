@@ -129,7 +129,7 @@ int main(int argc, char * argv[]) {
     shmBuffer[offset] = 0;
     sem_post(mutex);
     int resultfd = creat("./results.txt", 0600);
-    write(resultfd, shmBuffer, 2000);
+    write(resultfd, shmBuffer, offset);
     shm_unlink(SHMNAME);
     exit(0);
 }
