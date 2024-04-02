@@ -10,7 +10,7 @@
 #include <sys/wait.h>
 
 #define HASHING_ALGORITHM   "./md5sum"
-#define NUMBER_ARGV_HA      2
+#define NUMBER_ARGV_HA      5
 #define HA_RESULT_BYTES     33
 
 #define ORDINARY_ERROR      -1
@@ -20,53 +20,64 @@
 #define READ_END            0
 #define WRITE_END           1
 
-#define BUFFER_SIZE         1024
+#define DEFAULT_BUFFER_SIZE 1024
 
 void ordinaryErrorHandler(int status);
 
 int main(int argc, char *argv[]) {
 
-    int pid;
+    int cpid;
     int status;
     int pipeFd[2];
     char *argvForHA[NUMBER_ARGV_HA];
     char **envpForHA = NULL;
     char *pathOfFileForHA;
     char algorithmResult[HA_RESULT_BYTES];
-    char readBuffer[BUFFER_SIZE];
-    char writeBuffer[BUFFER_SIZE];
-    int readBufferBytes = 0;
+    char readBuffer[DEFAULT_BUFFER_SIZE];
+    char writeBuffer[DEFAULT_BUFFER_SIZE];
+    int pendingReadBufferBytes = 0;
     int writeBufferBytes = 0;
+    int myPid = getpid();
+    int firstRead = 1;
 
+    argvForHA[0] = HASHING_ALGORITHM;
+    argvForHA[1] = "-z";
+    argvForHA[2] = "--quiet";
     argvForHA[NUMBER_ARGV_HA-1] = NULL;
 
     do {
 
-        if (readBufferBytes <= 1) {
+        if (pendingReadBufferBytes <= 1) {
 
-            readBufferBytes = read(STDIN_FILENO, readBuffer, BUFFER_SIZE);
+            pendingReadBufferBytes = read(STDIN_FILENO, readBuffer, sizeof(readBuffer));
 
-            if (readBufferBytes < 1) {
+            if (pendingReadBufferBytes < 1) {
 
                 status = EXIT_SUCCESS;
                 break;
             }
         }
 
-        do { // Buscar próximo Path (se consumen de forma LIFO)
-            
-            readBufferBytes--;
+        if (firstRead) {
 
-        } while (readBufferBytes && readBuffer[readBufferBytes] != '\0');
+            while (pendingReadBufferBytes && readBuffer[pendingReadBufferBytes-1] != '\0') {
+
+                pendingReadBufferBytes--;
+            }
+            if (pendingReadBufferBytes == 0) {
+                
+                firstRead = 0;
+            }
+        }
 
         if (pipe(pipeFd) == ORDINARY_ERROR) {
 
             ordinaryErrorHandler(status);
         }
 
-        pid = fork();
+        cpid = fork();
 
-        if (pid == FORK_CHILD) {
+        if (cpid == FORK_CHILD) {
             
             close(pipeFd[READ_END]);
 
@@ -77,7 +88,7 @@ int main(int argc, char *argv[]) {
 
             close(pipeFd[WRITE_END]);
 
-            pathOfFileForHA = readBuffer + readBufferBytes;
+            pathOfFileForHA = readBuffer + pendingReadBufferBytes;
             argvForHA[NUMBER_ARGV_HA-2] = pathOfFileForHA;
 
             if (execve(HASHING_ALGORITHM, argvForHA, envpForHA) == 0) {
@@ -85,7 +96,7 @@ int main(int argc, char *argv[]) {
                 ordinaryErrorHandler(status);
             }
         }
-        else if (pid != FORK_ERROR) {
+        else if (cpid != FORK_ERROR) {
 
             close(pipeFd[WRITE_END]);
 
@@ -94,11 +105,11 @@ int main(int argc, char *argv[]) {
                 ordinaryErrorHandler(status);
             }
 
-            waitpid(pid, &status, 0);
+            waitpid(cpid, &status, 0);
 
             close(pipeFd[READ_END]);
 
-            writeBufferBytes = sprintf(writeBuffer, "%*s_%d", (int)sizeof(algorithmResult)-1, algorithmResult, getpid());
+            writeBufferBytes = sprintf(writeBuffer, "%*s_%d", (int)sizeof(algorithmResult)-1, algorithmResult, myPid);
 
             write(STDOUT_FILENO, writeBuffer, writeBufferBytes);
         }
