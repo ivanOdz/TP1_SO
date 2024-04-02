@@ -35,6 +35,7 @@ size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex);
 char * createSHM(char * name, size_t size);
 void sendSlaveTask(char * path, int fd);
 void createSlaves(int * readEndpoints, int * writeEndpoints, int amount);
+void killSlave(int * readfds, int * writefds, int slave);
 
 int main(int argc, char * argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -61,29 +62,42 @@ int main(int argc, char * argv[]) {
     int writefds[SLAVESQTY];    //var que recolecta todos los fds de escritura (app) de los pipes
     int readfds[SLAVESQTY];   //var que recolecta todos los fds de lectura (app) de los pipes
 
-    createSlaves(readfds, writefds, SLAVESQTY);
-    
-    int filesAssigned = 0;
+    int slaves = SLAVESQTY;
+    if (argc < SLAVESQTY) {
+        slaves = argc - 1;
+    }
+    createSlaves(readfds, writefds, slaves);
 
-    
+    int filesAssigned = 0;
+    int initialAssign = INITIAL_TASKS;
+    if (argc - 1 < slaves * INITIAL_TASKS) {
+        initialAssign = 1;
+    }
+    for (int i = 0; i < slaves; i++) {
+        for (int j = 0; j < initialAssign; j++){
+            sendSlaveTask(argv[1 + i * initialAssign + j], writefds[i]);
+        }
+        filesAssigned += initialAssign;
+    }
+
     fd_set set;
     int filesProcessed = 0;
     int maxFD = 0;
-    for (int i = 0; i < SLAVESQTY; i++){
+    for (int i = 0; i < slaves; i++){
         if (readfds[i] > maxFD){
             maxFD = readfds[i];
         }
     }
     char resultBuffer[BUFFER_SIZE];
 
-    while (filesProcessed < argc) {
+    while (filesProcessed < argc - 1) {
         FD_ZERO(&set);
-        for (int i = 0; i < SLAVESQTY; i++){
+        for (int i = 0; i < slaves; i++){
             FD_SET(readfds[i], &set);
         }
         select(maxFD + 1, &set, NULL, NULL, NULL);
 
-        for (int i = 0; i < SLAVESQTY; i++){
+        for (int i = 0; i < slaves; i++){
             if (FD_ISSET(readfds[i], &set)){
                 ssize_t bytesread = read(readfds[i], resultBuffer, BUFFER_SIZE);
                 size_t written = 0;
@@ -92,14 +106,14 @@ int main(int argc, char * argv[]) {
                     filesProcessed++;
                 }
                 offset += written;
-                if (filesAssigned < argc) {
-                    sendSlaveTask(++filesAssigned, i);
+                if (filesAssigned < argc - 1) {
+                    sendSlaveTask(argv[++filesAssigned], writefds[i]);
                 } else {
-                    killSlave(i);
+                    killSlave(writefds, readfds, i);
+                    slaves--;
                 }
             }
         }
-        
     }
 
     // A medida que los SLAVES escriben en el buffer de lectura, el cual app se queda "escuchando" mediante select,
@@ -109,10 +123,6 @@ int main(int argc, char * argv[]) {
 
     // Al final de programa, copio todo lo de la sharedMemory en un archivo resultado.txt.
 
-    char* texts[] = {"Hola que tal\n", "asdf\n", "qwertyoruiop\n", "asdf\n", "zxcv\n", "que embole\n", "otro string\n", "asdf\n", "qwer\n", "me harte chau\n"};
-    for(int i = 0; i < 10; i++) {
-        offset += shmWrite(shmBuffer + offset, texts[i], mutex);
-    }
     shmBuffer[offset] = 0;
     sem_post(mutex);
     //printf("%s", shmBuffer);
@@ -206,11 +216,24 @@ void createSlaves(int * readfds, int * writefds, int amount){
         close(anspipefd[WRITE_END]);
 
         // Acomodo los fds para que tomen el menor valor posible y los guardo
-        //writefds[slave] = dup(taskpipefd[1]);
-        //close(taskpipefd[1]);
 
         readfds[slave] = dup(anspipefd[READ_END]);
         close(anspipefd[READ_END]);
         writefds[slave] = taskpipefd[WRITE_END];
+    }
+}
+
+void killSlave(int * readfds, int * writefds, int slave) {
+    close(readfds[slave]);
+    close(writefds[slave]);
+    readfds[slave] = 0;
+    writefds[slave] = 0;
+    for (int i = slave; i < SLAVESQTY - 1; i++) {
+        int temp = readfds[slave];
+        readfds[slave] = readfds[slave + 1];
+        readfds[slave] = temp;
+        temp = writefds[slave];
+        writefds[slave] = writefds[slave + 1];
+        writefds[slave] = temp;
     }
 }
