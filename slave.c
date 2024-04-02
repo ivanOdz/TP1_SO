@@ -11,7 +11,8 @@
 
 #define HASHING_ALGORITHM   "/usr/bin/md5sum"
 #define NUMBER_ARGV_HA      4
-#define HA_RESULT_BYTES     33
+#define HA_RESULT_BYTES     32
+#define HA_BUFFER_SIZE      256
 
 #define ORDINARY_ERROR      -1
 #define FORK_CHILD          0
@@ -29,7 +30,7 @@ int main(int argc, char *argv[]) {
     int cpid;
     int status = EXIT_FAILURE;
     int pipeFd[2];
-    char *argvForHA[NUMBER_ARGV_HA];
+    char *argvForHA[HA_BUFFER_SIZE];
     char **envpForHA = NULL;
     char *pathOfFileForHA;
     char algorithmResult[HA_RESULT_BYTES];
@@ -46,16 +47,27 @@ int main(int argc, char *argv[]) {
 
     do {
 
-        if (pendingReadBufferBytes <= 1) {
+        if (pendingReadBufferBytes == 0) {
 
             pendingReadBufferBytes = read(STDIN_FILENO, readBuffer, sizeof(readBuffer));
-            pendingReadBufferBytes--;
-            readBuffer[pendingReadBufferBytes] = '\0';
-
+    
             if (pendingReadBufferBytes < 1) {
 
                 status = EXIT_SUCCESS;
                 break;
+            }
+
+            if (readBuffer[pendingReadBufferBytes-1] == '\n') {
+
+                pendingReadBufferBytes--;
+            }
+
+            readBuffer[pendingReadBufferBytes] = '\0';
+
+            if (!firstRead) {
+
+                pathOfFileForHA = readBuffer;
+                pendingReadBufferBytes = 0;
             }
         }
 
@@ -69,15 +81,15 @@ int main(int argc, char *argv[]) {
                 
                 firstRead = 0;
             }
-            
+
+            pathOfFileForHA = readBuffer + pendingReadBufferBytes;
         }
 
         if (pipe(pipeFd) == ORDINARY_ERROR) {
             
             ordinaryErrorHandler(status);
         }
-
-        pathOfFileForHA = (char*)(readBuffer + pendingReadBufferBytes);
+        
         cpid = fork();
 
         if (cpid == FORK_CHILD) {
@@ -103,7 +115,7 @@ int main(int argc, char *argv[]) {
             
             close(pipeFd[WRITE_END]);
 
-            if (read(pipeFd[READ_END], algorithmResult, sizeof(algorithmResult)) != sizeof(algorithmResult)) {
+            if (read(pipeFd[READ_END], algorithmResult, sizeof(algorithmResult)) < 0) {
 
                 ordinaryErrorHandler(status);
             }
@@ -112,7 +124,7 @@ int main(int argc, char *argv[]) {
 
             close(pipeFd[READ_END]);
 
-            writeBufferBytes = sprintf(writeBuffer, "%s - %s - %d\n", pathOfFileForHA, algorithmResult, myPid);
+            writeBufferBytes = sprintf(writeBuffer, "%s - %.*s - %d\n", pathOfFileForHA, HA_RESULT_BYTES, algorithmResult, myPid);
 
             write(STDOUT_FILENO, writeBuffer, writeBufferBytes);
         }
