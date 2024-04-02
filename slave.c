@@ -124,7 +124,8 @@ int main(int argc, char *argv[]) {
 
             close(pipeFd[READ_END]);
 
-            writeBufferBytes = sprintf(writeBuffer, "%s - %.*s - %d\n", pathOfFileForHA, HA_RESULT_BYTES, algorithmResult, myPid);
+            writeBufferBytes = snprintf(writeBuffer, DEFAULT_BUFFER_SIZE, "%s - %.*s - %d\n", pathOfFileForHA, HA_RESULT_BYTES, algorithmResult, myPid);
+
 
             write(STDOUT_FILENO, writeBuffer, writeBufferBytes + 1);
         }
