@@ -61,6 +61,7 @@ int main(int argc, char *argv[]) {
             writeBufferBytes = snprintf(writeBuffer, DEFAULT_BUFFER_SIZE, "%s - %.*s - %d\n", pathOfFileForHA, HA_RESULT_SIZE, algorithmResult, myPid);
             write(STDOUT_FILENO, writeBuffer, writeBufferBytes + 1);
             offset += strlen(pathOfFileForHA) + 1;
+            close(result);
         }
         
     } while (1);
