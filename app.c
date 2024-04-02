@@ -63,6 +63,7 @@ int main(int argc, char * argv[]) {
 
     int writefds[SLAVESQTY] = {-1};    //var que recolecta todos los fds de escritura (app) de los pipes
     int readfds[SLAVESQTY] = {-1};   //var que recolecta todos los fds de lectura (app) de los pipes
+    int slaveTasks[SLAVESQTY] = {0};
 
     int slaves = SLAVESQTY;
     if (argc < SLAVESQTY) {
@@ -78,6 +79,7 @@ int main(int argc, char * argv[]) {
     for (int i = 0; i < slaves; i++) {
         for (int j = 0; j < initialAssign; j++){
             sendSlaveTask(argv[1 + i * initialAssign + j], writefds[i]);
+            slaveTasks[i]++;
         }
         filesAssigned += initialAssign;
     }
@@ -108,10 +110,14 @@ int main(int argc, char * argv[]) {
                     int temp = shmWrite(shmBuffer + offset, resultBuffer + written, mutex);
                     written += temp + 1;
                     filesProcessed++;
-                    offset += temp + 1;
+                    offset += temp;
+                    slaveTasks[i]--;
                 }
                 if (filesAssigned < argc - 1) {
-                    sendSlaveTask(argv[++filesAssigned], writefds[i]);
+                    if (!slaveTasks[i]) {
+                        sendSlaveTask(argv[++filesAssigned], writefds[i]);
+                        slaveTasks[i]++;
+                    }
                 } else {
                     killSlave(writefds, readfds, i);
                     slaves--;
@@ -139,7 +145,6 @@ int main(int argc, char * argv[]) {
 size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex){
     size_t len = strlen(str);
     memcpy(shmBuffer, str, len);
-    shmBuffer[len] = 1;              //not over
     sem_post(mutex);
     return len;
 }
