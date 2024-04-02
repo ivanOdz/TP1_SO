@@ -109,7 +109,7 @@ int main(int argc, char * argv[]) {
                 if (filesAssigned < argc - 1) {
                     sendSlaveTask(argv[++filesAssigned], writefds[i]);
                 } else {
-                    killSlave(writefds, readfds, i);
+                    //killSlave(writefds, readfds, i);
                     slaves--;
                 }
             }
@@ -125,7 +125,8 @@ int main(int argc, char * argv[]) {
 
     shmBuffer[offset] = 0;
     sem_post(mutex);
-    //printf("%s", shmBuffer);
+    int resultfd = creat("./results.txt", 0600);
+    //write(resultfd, shmBuffer, 2000);
     shm_unlink(SHMNAME);
     exit(0);
 }
@@ -139,6 +140,7 @@ size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex){
 }
 
 char * createSHM(char * shmName, size_t size){
+    shm_unlink(SHMNAME);    //DEBUG!
     int shmMemFd = shm_open(shmName,  O_CREAT | O_RDWR, 0600);
     if(shmMemFd < 0) {
         perror("shm_open");
@@ -158,7 +160,7 @@ char * createSHM(char * shmName, size_t size){
 }
 
 void sendSlaveTask(char * path, int fd){
-    write(fd, path, strlen(path));
+    write(fd, path, strlen(path) + 1);
 }
 
 void createSlaves(int * readfds, int * writefds, int amount){
@@ -168,7 +170,7 @@ void createSlaves(int * readfds, int * writefds, int amount){
     int taskpipefd[2];   //var temporal de fds del pipe donde app pasa argumentos al esclavo
 
     pid_t cpid;
-    for(int slave = 0; slave < SLAVESQTY; slave++) {
+    for(int slave = 0; slave < amount; slave++) {
         //Creo los 2 pipes
         if(pipe(taskpipefd) < 0) {
             perror("pipe");
@@ -185,8 +187,8 @@ void createSlaves(int * readfds, int * writefds, int amount){
         }
         if(cpid == 0) {
             // Dentro del hijo, cierro fds que no uso
-            close(READ_END);
-            close(WRITE_END);
+            close(STDIN_FILENO);
+            close(STDOUT_FILENO);
             close(anspipefd[READ_END]);    //donde escribo, no me interesa leer
             close(taskpipefd[WRITE_END]);   //donde leo, no me interesa escribir
 
