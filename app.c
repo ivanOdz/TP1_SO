@@ -105,8 +105,12 @@ int main(int argc, char * argv[]) {
             if (readfds[i] != -1 && FD_ISSET(readfds[i], &set)){
                 FD_CLR(readfds[i], &set);
                 ssize_t bytesread = read(readfds[i], resultBuffer, BUFFER_SIZE);
+                if (bytesread == -1) {
+                    perror("Error reading result from slave");
+                    exit(-1);
+                }
                 size_t written = 0;
-                while (written < bytesread){
+                while (written < (size_t)bytesread){
                     int temp = shmWrite(shmBuffer + offset, resultBuffer + written, mutex);
                     written += temp + 1;
                     filesProcessed++;
@@ -119,7 +123,7 @@ int main(int argc, char * argv[]) {
                         slaveTasks[i]++;
                     }
                 } else {
-                    killSlave(writefds, readfds, i);
+                    killSlave(readfds, writefds, i);
                     slaves--;
                 }
                 i = 0;

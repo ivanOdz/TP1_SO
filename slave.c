@@ -31,7 +31,6 @@ int main(int argc, char *argv[]) {
     int pendingReadBufferBytes = 0;
     int writeBufferBytes = 0;
     int myPid = getpid();
-    int firstRead = 1;
 
     FILE * result;
 
@@ -41,6 +40,10 @@ int main(int argc, char *argv[]) {
             if (readBytes == 0) {
                 status = EXIT_SUCCESS;
                 break;
+            }
+            if (readBytes == -1) {
+                perror("Error reading task");
+                exit(ORDINARY_ERROR);
             }
 
             if (readBuffer[readBytes-1] == '\n') {
