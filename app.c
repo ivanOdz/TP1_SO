@@ -59,8 +59,8 @@ int main(int argc, char * argv[]) {
     sleep(2); 
 
 
-    int writefds[SLAVESQTY];    //var que recolecta todos los fds de escritura (app) de los pipes
-    int readfds[SLAVESQTY];   //var que recolecta todos los fds de lectura (app) de los pipes
+    int writefds[SLAVESQTY] = {-1};    //var que recolecta todos los fds de escritura (app) de los pipes
+    int readfds[SLAVESQTY] = {-1};   //var que recolecta todos los fds de lectura (app) de los pipes
 
     int slaves = SLAVESQTY;
     if (argc < SLAVESQTY) {
@@ -90,15 +90,15 @@ int main(int argc, char * argv[]) {
     }
     char resultBuffer[BUFFER_SIZE];
 
-    while (filesProcessed < argc - 1) {
+    while (slaves) {
         FD_ZERO(&set);
-        for (int i = 0; i < slaves; i++){
-            FD_SET(readfds[i], &set);
+        for (int i = 0; i < SLAVESQTY; i++){
+            if (readfds[i] != -1) FD_SET(readfds[i], &set);
         }
         select(maxFD + 1, &set, NULL, NULL, NULL);
 
-        for (int i = 0; i < slaves; i++){
-            if (FD_ISSET(readfds[i], &set) && readfds[i] != 0){
+        for (int i = 0; i < SLAVESQTY; i++){
+            if (readfds[i] != -1 && FD_ISSET(readfds[i], &set)){
                 FD_CLR(readfds[i], &set);
                 ssize_t bytesread = read(readfds[i], resultBuffer, BUFFER_SIZE);
                 size_t written = 0;
@@ -113,7 +113,6 @@ int main(int argc, char * argv[]) {
                 } else {
                     killSlave(writefds, readfds, i);
                     slaves--;
-                    
                 }
                 i = 0;
             }
@@ -232,14 +231,6 @@ void createSlaves(int * readfds, int * writefds, int amount){
 void killSlave(int * readfds, int * writefds, int slave) {
     close(readfds[slave]);
     close(writefds[slave]);
-    readfds[slave] = 0;
-    writefds[slave] = 0;
-    for (int i = slave; i < SLAVESQTY - 1; i++) {
-        int temp = readfds[slave];
-        readfds[slave] = readfds[slave + 1];
-        readfds[slave] = temp;
-        temp = writefds[slave];
-        writefds[slave] = writefds[slave + 1];
-        writefds[slave] = temp;
-    }
+    readfds[slave] = -1;
+    writefds[slave] = -1;
 }
