@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <string.h>
+#include <fcntl.h>
 
 #define HASHING_ALGORITHM   "md5sum"
 
@@ -35,47 +36,32 @@ int main(int argc, char *argv[]) {
     FILE * result;
 
     do {
-        if (pendingReadBufferBytes == 0) {
-            pendingReadBufferBytes = read(STDIN_FILENO, readBuffer, sizeof(readBuffer));
+        int readBytes = read(STDIN_FILENO, readBuffer, sizeof(readBuffer));
 
-            if (pendingReadBufferBytes < 1) {
+            if (readBytes == 0) {
                 status = EXIT_SUCCESS;
                 break;
             }
 
-            if (readBuffer[pendingReadBufferBytes-1] == '\n') {
+            if (readBuffer[readBytes-1] == '\n') {
                 readBuffer[--pendingReadBufferBytes] = '\0';
             }
-
-            if (!firstRead) {
-                pathOfFileForHA = readBuffer;
-                pendingReadBufferBytes = 0;
-            }
-        }
-
-        if (firstRead) {
-            while (pendingReadBufferBytes && readBuffer[pendingReadBufferBytes-1] != '\0') {
-                pendingReadBufferBytes--;
-            }
+        size_t offset = 0;
+        while (offset < readBytes) {
+            pathOfFileForHA = readBuffer + offset;
+            snprintf(commandBuff, DEFAULT_BUFFER_SIZE, "%.*s %.*s", (int)strlen(HASHING_ALGORITHM), HASHING_ALGORITHM, (int)strlen(pathOfFileForHA), pathOfFileForHA);
+            result = popen(commandBuff, "r");
         
-            if (pendingReadBufferBytes == 0) {
-                firstRead = 0;
+            if (result == NULL) {
+                perror("popen");
+                exit(ORDINARY_ERROR);
             }
 
-            pathOfFileForHA = readBuffer + pendingReadBufferBytes;
+            fgets(algorithmResult, HA_RESULT_SIZE, result);
+            writeBufferBytes = snprintf(writeBuffer, DEFAULT_BUFFER_SIZE, "%s - %.*s - %d\n", pathOfFileForHA, HA_RESULT_SIZE, algorithmResult, myPid);
+            write(STDOUT_FILENO, writeBuffer, writeBufferBytes + 1);
+            offset += strlen(pathOfFileForHA) + 1;
         }
-
-        snprintf(commandBuff, DEFAULT_BUFFER_SIZE, "%.*s %.*s", (int)strlen(HASHING_ALGORITHM), HASHING_ALGORITHM, (int)strlen(pathOfFileForHA), pathOfFileForHA);
-        result = popen(commandBuff, "r");
-    
-        if (result == NULL) {
-            perror("popen");
-            exit(ORDINARY_ERROR);
-        }
-
-        fgets(algorithmResult, HA_RESULT_SIZE, result);
-        writeBufferBytes = snprintf(writeBuffer, DEFAULT_BUFFER_SIZE, "%s - %.*s - %d\n", pathOfFileForHA, HA_RESULT_SIZE, algorithmResult, myPid);
-        write(STDOUT_FILENO, writeBuffer, writeBufferBytes + 1);
         
     } while (1);
 
