@@ -15,7 +15,7 @@
 #define SHMNAME "/app_shm"
 #define SHMSIZE 2000000
 #define SLAVESQTY 5
-#define INITIAL_TASKS 2
+#define INITIAL_TASKS 1
 #define BUFFER_SIZE 1024
 
 
@@ -99,20 +99,23 @@ int main(int argc, char * argv[]) {
 
         for (int i = 0; i < slaves; i++){
             if (FD_ISSET(readfds[i], &set) && readfds[i] != 0){
+                FD_CLR(readfds[i], &set);
                 ssize_t bytesread = read(readfds[i], resultBuffer, BUFFER_SIZE);
                 size_t written = 0;
                 while (written < bytesread){
-                    written += shmWrite(shmBuffer + offset + written, resultBuffer + written, mutex);
-                    written++;
+                    int temp = shmWrite(shmBuffer + offset, resultBuffer + written, mutex);
+                    written += temp + 1;
                     filesProcessed++;
+                    offset += temp;
                 }
-                offset += written;
                 if (filesAssigned < argc - 1) {
                     sendSlaveTask(argv[++filesAssigned], writefds[i]);
                 } else {
-                    //killSlave(writefds, readfds, i);
+                    killSlave(writefds, readfds, i);
                     slaves--;
+                    
                 }
+                i = 0;
             }
         }
     }
@@ -127,7 +130,7 @@ int main(int argc, char * argv[]) {
     shmBuffer[offset] = 0;
     sem_post(mutex);
     int resultfd = creat("./results.txt", 0600);
-    //write(resultfd, shmBuffer, 2000);
+    write(resultfd, shmBuffer, 2000);
     shm_unlink(SHMNAME);
     exit(0);
 }
