@@ -22,7 +22,7 @@
 #define TASK_ERROR_MESSAGE  "Error reading task"
 #define POPEN_ERROR_MESSAGE "Error at popen"
 
-int main(int argc, char *argv[]) {
+int main(int argc, char * argv[]) {
 
     char * pathOfFileForHA;
     char algorithmResult[HA_RESULT_SIZE];
@@ -43,18 +43,18 @@ int main(int argc, char *argv[]) {
         if (readBytes == 0) {
             exit(EXIT_SUCCESS);
         }
-        if (readBytes == -1) {
+        if (readBytes < 0) {
             perror(TASK_ERROR_MESSAGE);
             exit(ORDINARY_ERROR);
         }
-        if (readBuffer[readBytes-1] == '\n') {
+        if (readBuffer[readBytes - 1] == '\n') {
             readBuffer[--pendingReadBufferBytes] = '\0';
         }
         size_t offset = 0;
 
         while (offset < readBytes) {
             pathOfFileForHA = readBuffer + offset;
-            snprintf(commandBuffer, DEFAULT_BUFFER_SIZE, "%.*s %.*s", (int)sizeof(HASHING_ALGORITHM)-1, HASHING_ALGORITHM, (int)strlen(pathOfFileForHA), pathOfFileForHA);
+            snprintf(commandBuffer, DEFAULT_BUFFER_SIZE, "%.*s %.*s", (int)sizeof(HASHING_ALGORITHM) - 1, HASHING_ALGORITHM, (int)strlen(pathOfFileForHA), pathOfFileForHA);
             result = popen(commandBuffer, "r");
 
             if (result == NULL) {
