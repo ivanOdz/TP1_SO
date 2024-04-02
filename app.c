@@ -98,11 +98,12 @@ int main(int argc, char * argv[]) {
         select(maxFD + 1, &set, NULL, NULL, NULL);
 
         for (int i = 0; i < slaves; i++){
-            if (FD_ISSET(readfds[i], &set)){
+            if (FD_ISSET(readfds[i], &set) && readfds[i] != 0){
                 ssize_t bytesread = read(readfds[i], resultBuffer, BUFFER_SIZE);
                 size_t written = 0;
                 while (written < bytesread){
                     written += shmWrite(shmBuffer + offset + written, resultBuffer + written, mutex);
+                    written++;
                     filesProcessed++;
                 }
                 offset += written;
