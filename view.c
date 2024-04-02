@@ -11,19 +11,19 @@
 #include <fcntl.h>
 #include <string.h>
 
-#define MAP_LENGTH 2000000 //2MB
+#define MAP_LENGTH 2000000 
 
-int getLineLen(char* string);
-char* openShm(char* handle);
+int getLineLen(char * string);
+char* openShm(char * handle);
 
-int main(int argc, char* argv[]) {
-    char* sharedMem;
+int main(int argc, char * argv[]) {
+    char * sharedMem;
 
     if (argc > 1) {
         sharedMem = openShm(argv[1]);
     } else {
         size_t bufferSize = 1024;
-        char* sharedMemHandle = (char*) malloc(bufferSize * sizeof(char));
+        char * sharedMemHandle = (char *) malloc(bufferSize * sizeof(char));
         if (sharedMemHandle == NULL) {
             perror("Unable to process shared memory handle");
             exit(1);
@@ -34,8 +34,8 @@ int main(int argc, char* argv[]) {
         free(sharedMemHandle);
     }
 
-    sem_t* mutex = (sem_t*) sharedMem;
-    char* resultBuffer = sharedMem + sizeof(sem_t);
+    sem_t * mutex = (sem_t *) sharedMem;
+    char * resultBuffer = sharedMem + sizeof(sem_t);
     size_t offset = 0;
 
     do {
@@ -49,23 +49,23 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-int getLineLen(char* string) {
+int getLineLen(char * string) {
     int len = 1;
     while (string[len] != '\n' && string[len] != 0) len++;
     return len;
 }
 
-char* openShm(char* handle) {
+char * openShm(char * handle) {
     int fd = shm_open(handle, O_RDWR, 0600);
     if (fd == -1) {
         perror("Error opening shared memory");
         exit(1);
     }
-    char* shmMap = mmap(NULL, MAP_LENGTH, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    char * shmMap = mmap(NULL, MAP_LENGTH, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if ((long)shmMap == -1) {
         perror("Error mapping shared memory");
         exit(1);
     }
-    close(fd);      //fd can be closed without affecting shm mapping
+    close(fd);     
     return shmMap;
 }
