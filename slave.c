@@ -27,7 +27,7 @@ void ordinaryErrorHandler(int status);
 int main(int argc, char *argv[]) {
 
     int cpid;
-    int status;
+    int status = EXIT_FAILURE;
     int pipeFd[2];
     char *argvForHA[NUMBER_ARGV_HA];
     char **envpForHA = NULL;
@@ -50,6 +50,7 @@ int main(int argc, char *argv[]) {
         if (pendingReadBufferBytes <= 1) {
 
             pendingReadBufferBytes = read(STDIN_FILENO, readBuffer, sizeof(readBuffer));
+            readBuffer[pendingReadBufferBytes-1] = '\0';
 
             if (pendingReadBufferBytes < 1) {
 
@@ -71,17 +72,18 @@ int main(int argc, char *argv[]) {
         }
 
         if (pipe(pipeFd) == ORDINARY_ERROR) {
-
+            
             ordinaryErrorHandler(status);
         }
 
-        cpid = fork();
+        cpid = fork();              // 0 (STD_IN) | 1 (WRITE) | 2 (STD_ERR) |
 
         if (cpid == FORK_CHILD) {
             
-            close(pipeFd[READ_END]);
-
-            if (dup2(pipeFd[WRITE_END], STDOUT_FILENO) == 0) {
+            close(pipeFd[READ_END]); 
+            close(STDOUT_FILENO);
+            
+            if (dup(pipeFd[WRITE_END]) < 0) {
 
                 ordinaryErrorHandler(status);
             }
@@ -90,14 +92,16 @@ int main(int argc, char *argv[]) {
 
             pathOfFileForHA = readBuffer + pendingReadBufferBytes;
             argvForHA[NUMBER_ARGV_HA-2] = pathOfFileForHA;
+            
+            printf("%s\n", pathOfFileForHA);
 
-            if (execve(HASHING_ALGORITHM, argvForHA, envpForHA) == 0) {
+            if (execve(HASHING_ALGORITHM, argvForHA, envpForHA) < 0) {
 
                 ordinaryErrorHandler(status);
             }
         }
         else if (cpid != FORK_ERROR) {
-
+            
             close(pipeFd[WRITE_END]);
 
             if (read(pipeFd[READ_END], algorithmResult, sizeof(algorithmResult)) != sizeof(algorithmResult)) {
@@ -114,7 +118,7 @@ int main(int argc, char *argv[]) {
             write(STDOUT_FILENO, writeBuffer, writeBufferBytes);
         }
         else {
-
+            
             ordinaryErrorHandler(status);
         }
 
