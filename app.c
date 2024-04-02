@@ -61,8 +61,8 @@ int main(int argc, char * argv[]) {
     sleep(2); 
 
 
-    int writefds[SLAVESQTY] = {-1};    //var que recolecta todos los fds de escritura (app) de los pipes
-    int readfds[SLAVESQTY] = {-1};   //var que recolecta todos los fds de lectura (app) de los pipes
+    int writefds[SLAVESQTY] = {[0 ... SLAVESQTY-1] = -1};    //var que recolecta todos los fds de escritura (app) de los pipes
+    int readfds[SLAVESQTY] = {[0 ... SLAVESQTY-1] = -1};   //var que recolecta todos los fds de lectura (app) de los pipes
     int slaveTasks[SLAVESQTY] = {0};
 
     int slaves = SLAVESQTY;
