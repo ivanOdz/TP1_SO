@@ -11,7 +11,7 @@
 #define HASHING_ALGORITHM   "md5sum"
 
 #define DEFAULT_BUFFER_SIZE 1024
-#define HA_RESULT_SIZE      32
+#define HA_RESULT_SIZE      33
 #define HA_BUFFER_SIZE      256
 
 #define ORDINARY_ERROR      -1
