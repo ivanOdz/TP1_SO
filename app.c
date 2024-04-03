@@ -134,7 +134,7 @@ int main(int argc, char * argv[]) {
                         slaveTasks[i]++;
                     }
                 } else {
-                    if (slaveCompletedTasks[i] == initialAssign) {
+                    if (slaveCompletedTasks[i] >= initialAssign) {
                         killSlave(readfds, writefds, i);
                         slaves--;
                     }
@@ -148,6 +148,7 @@ int main(int argc, char * argv[]) {
     sem_post(mutex);
     int resultfd = creat("./results.txt", 0600);
     write(resultfd, shmBuffer, offset);
+    close(resultfd);
     shm_unlink(SHMNAME);
     exit(EXIT_SUCCESS);
 }
