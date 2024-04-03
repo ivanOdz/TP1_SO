@@ -60,6 +60,7 @@ int main(int argc, char * argv[]) {
     int writefds[SLAVESQTY] = {[0 ... SLAVESQTY-1] = -1};
     int readfds[SLAVESQTY] = {[0 ... SLAVESQTY-1] = -1};
     int slaveTasks[SLAVESQTY] = {0};
+    int slaveCompletedTasks[SLAVESQTY] = {0};
 
     int slaves = SLAVESQTY;
 
@@ -125,6 +126,7 @@ int main(int argc, char * argv[]) {
                     filesProcessed++;
                     offset += temp;
                     slaveTasks[i]--;
+                    slaveCompletedTasks[i]++;
                 }
                 if (filesAssigned < argc - 1) {
                     if (!slaveTasks[i]) {
@@ -132,8 +134,10 @@ int main(int argc, char * argv[]) {
                         slaveTasks[i]++;
                     }
                 } else {
-                    killSlave(readfds, writefds, i);
-                    slaves--;
+                    if (slaveCompletedTasks[i] == initialAssign) {
+                        killSlave(readfds, writefds, i);
+                        slaves--;
+                    }
                 }
                 i = 0;
             }
