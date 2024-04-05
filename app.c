@@ -12,12 +12,15 @@
 #include <sys/select.h>
 #include <errno.h>
 
+#define SLAVEPROCESS            "./slave"
+#define RESULTFILE              "results.txt"
 #define SHMNAME                 "/app_shm"
 #define SHMSIZE                 2000000
 #define SLAVESQTY               10
 #define INITIAL_TASKS           3
 #define BUFFER_SIZE             1024
 #define SLAVEDEAD               -1
+#define ERROR                   -1
 
 #define READ_END                0
 #define WRITE_END               1
@@ -43,6 +46,11 @@ void createSlaves(int * readEndpoints, int * writeEndpoints, int amount);
 void killSlave(int * readfds, int * writefds, int slave);
 void errorAbort(char * message);
 int Dup(int oldfd);
+void dumpToFile(char * source);
+void Exit(int returnValue);
+
+
+char * shmAddr = NULL;
 
 
 int main(int argc, char * argv[]) {
@@ -53,7 +61,7 @@ int main(int argc, char * argv[]) {
         errorAbort(EARGS);
     }
     
-    char * shmAddr = createSHM(SHMNAME, SHMSIZE);
+    shmAddr = createSHM(SHMNAME, SHMSIZE);
     char * shmBuffer = shmAddr + sizeof(sem_t);
     sem_t * mutex = (sem_t *) shmAddr;
     size_t offset = 0;
@@ -101,20 +109,20 @@ int main(int argc, char * argv[]) {
     while (slaves) {
         FD_ZERO(&set);
         for (int i = 0; i < SLAVESQTY; i++) {
-            if (readfds[i] != -1) {
+            if (readfds[i] != SLAVEDEAD) {
                 FD_SET(readfds[i], &set);
             }
         }
-        if (select(maxFD + 1, &set, NULL, NULL, NULL) == -1) {
+        if (select(maxFD + 1, &set, NULL, NULL, NULL) == ERROR) {
             errorAbort(EREADSLAVE);
         }
 
         for (int i = 0; i < SLAVESQTY; i++) {
-            if (readfds[i] != -1 && FD_ISSET(readfds[i], &set)) {
+            if (readfds[i] != SLAVEDEAD && FD_ISSET(readfds[i], &set)) {
                 FD_CLR(readfds[i], &set);
                 ssize_t bytesread = read(readfds[i], resultBuffer, BUFFER_SIZE);
 
-                if (bytesread < 0) {
+                if (bytesread == ERROR) {
                     errorAbort(EREADSLAVE);
                 }
                 if (offset + bytesread > SHMSIZE) {
@@ -145,49 +153,35 @@ int main(int argc, char * argv[]) {
             }
         }
     }
-
-    shmBuffer[offset] = 0;
-    sem_post(mutex);
-    int resultfd = creat("./results.txt", 0600);
-    if (resultfd == -1) {
-        errorAbort(ERESULTFILE);
-    }
-    if (write(resultfd, shmBuffer, offset) == -1) {
-        errorAbort(ERESULTFILE);
-    }
-    close(resultfd);
-    shm_unlink(SHMNAME);
-    exit(EXIT_SUCCESS);
+    Exit(EXIT_SUCCESS);
 }
 
 size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex) {
-
     size_t len = strlen(str);
     memcpy(shmBuffer, str, len);
     sem_post(mutex);
-
     return len;
 }
 
 char * createSHM(char * shmName, size_t size) {
-
     shm_unlink(SHMNAME);
     int shmMemFd = shm_open(shmName,  O_CREAT | O_RDWR, 0600);
 
-    if (shmMemFd < 0) {
+    if (shmMemFd == ERROR) {
         errorAbort(ESHM);
     }
-    if (ftruncate(shmMemFd, size) < 0) {
+    if (ftruncate(shmMemFd, size) == ERROR) {
         errorAbort(ESHM);
     }
+
     char * shmAddr;
     shmAddr = mmap(NULL, SHMSIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shmMemFd, 0);
 
     if (shmAddr == MAP_FAILED) {
         errorAbort(ESHM);
     }
-    close(shmMemFd);
 
+    close(shmMemFd);
     return shmAddr;
 }
 
@@ -201,12 +195,15 @@ void createSlaves(int * readfds, int * writefds, int amount) {
     pid_t cpid;
 
     for (int slave = 0; slave < amount; slave++) {
-        if ((pipe(taskpipefd) < 0) || (pipe(anspipefd) < 0)) {
+        if (pipe(taskpipefd) == ERROR) {
+            errorAbort(EPIPES);
+        }
+        if  (pipe(anspipefd) == ERROR) {
             errorAbort(EPIPES);
         }
 
         cpid = fork();
-        if (cpid < 0) {
+        if (cpid == ERROR) {
             errorAbort(ERUNSLAVE);
         }
         if (cpid == 0) {
@@ -225,7 +222,7 @@ void createSlaves(int * readfds, int * writefds, int amount) {
                 close(readfds[i]);
             }
 
-            char * args1[] = {"./slave", NULL};
+            char * args1[] = {SLAVEPROCESS, NULL};
             execve(args1[0], args1, NULL);
             errorAbort(ERUNSLAVE);
         }
@@ -247,7 +244,7 @@ void killSlave(int * readfds, int * writefds, int slave) {
 
 int Dup(int oldfd) {
     int newfd = dup(oldfd);
-    if (newfd < 0) {
+    if (newfd == ERROR) {
         errorAbort(EPIPES);
     }
     return newfd;
@@ -259,5 +256,28 @@ void errorAbort(char * message) {
     } else {
         perror(message);
     }
-    exit(-1);
+    Exit(-1);
+}
+
+void Exit(int returnValue){
+    if (shmAddr != NULL) {
+        sem_post((sem_t *)shmAddr);
+        dumpToFile(shmAddr + sizeof(sem_t));
+        sem_destroy((sem_t *)shmAddr);
+        shm_unlink(SHMNAME);
+    }
+    exit(returnValue);
+}
+
+void dumpToFile(char * source){
+    int resultfd = creat(RESULTFILE, 0600);
+    if (resultfd == ERROR) {
+        perror(ERESULTFILE);
+        return;
+    } 
+    if (write(resultfd, source, strlen(source)) == -1) {
+        perror(ERESULTFILE);
+    }
+    close(resultfd);
+    return;
 }
