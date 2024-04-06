@@ -7,21 +7,24 @@
 #include <fcntl.h>           /* For O_* constants */
 #include <unistd.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 #include <semaphore.h>
 #include <string.h>
 #include <sys/select.h>
 #include <errno.h>
 
+//config parameters
 #define SLAVEPROCESS            "./slave"
 #define RESULTFILE              "results.txt"
 #define SHMNAME                 "/app_shm"
 #define SHMSIZE                 2000000
-#define SLAVESQTY               10
+#define SLAVESQTY               8
 #define INITIAL_TASKS           3
 #define BUFFER_SIZE             1024
+#define SHM_WAIT_TIME           2
+
 #define SLAVEDEAD               -1
 #define ERROR                   -1
-
 #define READ_END                0
 #define WRITE_END               1
 
@@ -42,8 +45,8 @@
 size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex);
 char * createSHM(char * name, size_t size);
 void sendSlaveTask(char * path, int fd);
-void createSlaves(int * readEndpoints, int * writeEndpoints, int amount);
-void killSlave(int * readfds, int * writefds, int slave);
+void createSlaves(int amount);
+void killSlave(int slave);
 void errorAbort(char * message);
 int Dup(int oldfd);
 void dumpToFile(char * source);
@@ -51,6 +54,8 @@ void Exit(int returnValue);
 
 
 char * shmAddr = NULL;
+int writefds[SLAVESQTY] = {[0 ... SLAVESQTY-1] = SLAVEDEAD};
+int readfds[SLAVESQTY] = {[0 ... SLAVESQTY-1] = SLAVEDEAD};
 
 
 int main(int argc, char * argv[]) {
@@ -70,10 +75,8 @@ int main(int argc, char * argv[]) {
     }   
     
     printf("%s\n", SHMNAME);
-    sleep(2); 
+    sleep(SHM_WAIT_TIME); 
 
-    int writefds[SLAVESQTY] = {[0 ... SLAVESQTY-1] = SLAVEDEAD};
-    int readfds[SLAVESQTY] = {[0 ... SLAVESQTY-1] = SLAVEDEAD};
     int slaveTasks[SLAVESQTY] = {0};
 
     int slaves = SLAVESQTY;
@@ -81,7 +84,7 @@ int main(int argc, char * argv[]) {
     if (argc < SLAVESQTY) {
         slaves = argc - 1;
     }
-    createSlaves(readfds, writefds, slaves);
+    createSlaves(slaves);
     int filesAssigned = 0;
     int initialAssign = INITIAL_TASKS;
 
@@ -145,7 +148,7 @@ int main(int argc, char * argv[]) {
                     }
                 } else {
                     if (!slaveTasks[i]){
-                        killSlave(readfds, writefds, i);
+                        killSlave(i);
                         slaves--;
                     }
                 }
@@ -165,7 +168,7 @@ size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex) {
 
 char * createSHM(char * shmName, size_t size) {
     shm_unlink(SHMNAME);
-    int shmMemFd = shm_open(shmName,  O_CREAT | O_RDWR, 0600);
+    int shmMemFd = shm_open(shmName,  O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 
     if (shmMemFd == ERROR) {
         errorAbort(ESHM);
@@ -189,7 +192,7 @@ void sendSlaveTask(char * path, int fd) {
     write(fd, path, strlen(path) + 1);
 }
 
-void createSlaves(int * readfds, int * writefds, int amount) {
+void createSlaves(int amount) {
     int anspipefd[2];
     int taskpipefd[2];
     pid_t cpid;
@@ -235,11 +238,15 @@ void createSlaves(int * readfds, int * writefds, int amount) {
     }
 }
 
-void killSlave(int * readfds, int * writefds, int slave) {
-    close(readfds[slave]);
-    close(writefds[slave]);
-    readfds[slave] = -1;
-    writefds[slave] = -1;
+void killSlave(int slave) {
+    if (writefds[slave] != SLAVEDEAD){
+        close(readfds[slave]);
+        close(writefds[slave]);
+        readfds[slave] = SLAVEDEAD;
+        writefds[slave] = SLAVEDEAD;
+        wait(NULL);
+    }
+
 }
 
 int Dup(int oldfd) {
@@ -266,16 +273,19 @@ void Exit(int returnValue){
         sem_destroy((sem_t *)shmAddr);
         shm_unlink(SHMNAME);
     }
+    for (int i = 0 ; i < SLAVESQTY; i++) {
+        killSlave(i);
+    }
     exit(returnValue);
 }
 
 void dumpToFile(char * source){
-    int resultfd = creat(RESULTFILE, 0600);
+    int resultfd = creat(RESULTFILE, S_IRUSR | S_IWUSR);
     if (resultfd == ERROR) {
         perror(ERESULTFILE);
         return;
     } 
-    if (write(resultfd, source, strlen(source)) == -1) {
+    if (write(resultfd, source, strlen(source)) == ERROR) {
         perror(ERESULTFILE);
     }
     close(resultfd);
