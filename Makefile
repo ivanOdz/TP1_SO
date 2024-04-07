@@ -27,6 +27,7 @@ slave: slave.c
 
 pvs:
 	@echo -e "\n\nRUNNING PVS-STUDIO TEST\n\n\n"
+	make clean
 	pvs-studio-analyzer trace -- make
 	pvs-studio-analyzer analyze
 	plog-converter -a '64:1,2,3;GA:1,2,3;OP:1,2,3' -t tasklist -o report.tasks PVS-Studio.log
@@ -42,10 +43,10 @@ valgrind:
 
 compare:
 	@echo -e "\n\nRUNNING DIFF\n\n\n"
-	/usr/bin/md5sum ./files/** | while read md5 file; do echo "$$file - $$md5"; done | sort > outputReal.txt
-	sort results.txt | sed 's/ - [0-9]\+$$//g' > outputSorted.txt
-	diff outputReal.txt outputSorted.txt
-	rm -f outputReal.txt outputSorted.txt results.txt
+	./app files/*
+	md5sum files/* | while read md5 file; do echo "$$file - $$md5"; done | sort > outputReal.txt
+	diff <(sort results.txt | sed 's/ - [0-9]\+$$//g')  outputReal.txt
+	rm -f outputReal.txt
 	@echo -e "\n\n\nDIFF ENDED\n\n"
 clean:
 	rm -f app view slave
