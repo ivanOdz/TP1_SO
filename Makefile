@@ -82,11 +82,11 @@ compare:
 	@DIFFRES=$$(diff <(./app files/* | ./view | sort | sed 's/ - [0-9]\+$$//g')  <(md5sum files/* | while read md5 file; do echo "$$file - $$md5"; done | sort) | cat);\
 	if [ ! -z "$$DIFFRES" ]; then \
 		tput setaf 1; \
-		echo -e "\n\nVALGRIND ENCOUNTERED AN ERROR IN VIEW\n"; \
+		echo -e "\n\nnDIFF HAS FOUND SOME DIFFERENCES\n"; \
 		echo -e "$$DIFFRES"; \
 	else \
 		tput setaf 2; \
-		echo -e "\n\nVALGRIND VIEW TEST FINISHED SUCCESSFULLY\n"; \
+		echo -e "\n\nDIFF DIDN'T FIND ANY DIFFERENCES\n"; \
 	fi
 	@tput sgr0	
 	
