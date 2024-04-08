@@ -4,7 +4,7 @@ all: app view slave
 
 testfiles:
 	mkdir -p files
-	cd files; \
+	@cd files; \
 	for ((i=1; i<=5; i++)); do \
 		dd if=/dev/urandom of=file$$i bs=$$((RANDOM % 300))M count=1; \
 		ln -s file$$i link$${i}_1; \
@@ -14,7 +14,7 @@ testfiles:
 		ln -s file$$i link$${i}_6; \
 	done;
 
-analyze: pvs clean all valgrind compare
+analyze: pvs valgrind compare
 
 app: app.c
 	gcc -Wall $< -g -o $@
@@ -51,11 +51,12 @@ valgrind:
 	@tput setaf 4
 	@echo -e "\nRUNNING VALGRIND TEST FOR APP/SLAVE"
 	@tput sgr0
-	@VAL1RES=$$(valgrind --leak-check=full --show-leak-kinds=all -s --trace-children=yes --trace-children-skip=/usr/bin/md5sum,/bin/sh --log-fd=9 ./app ./files/* 9>&1 1>/dev/null | grep -e "ERROR SUMMARY: [1-9][0-9]*" | cat)
-	@if [ ! -z $$VAL1RES ]; then \
+	@VAL1RES=$$(valgrind --leak-check=full --show-leak-kinds=all -s --trace-children=yes --trace-children-skip=/usr/bin/md5sum,/bin/sh --log-fd=9 ./app ./files/* 9>&1 1>/dev/null | cat); \
+	VAL1GREP=$$(echo "$$VAL1RES" | grep -e "ERROR SUMMARY: [1-9][0-9]*" | cat);\
+	if [ ! -z "$$VAL1GREP" ]; then \
 		tput setaf 1; \
 		echo -e "\n\nVALGRIND ENCOUNTERED AN ERROR IN APP-SLAVE\n"; \
-		cat $$VAL1RES; \
+		echo -e "$$VAL1RES"; \
 	else \
 		tput setaf 2; \
 		echo -e "\n\nVALGRIND APP-SLAVE TEST FINISHED SUCCESSFULLY\n"; \
@@ -64,11 +65,12 @@ valgrind:
 	@echo -e "\nRUNNING VALGRIND TEST FOR VIEW"
 	@tput sgr0	
 	@./app ./files/* > /dev/null &
-	@VAL2RES=$$(echo "/app_shm" | valgrind --leak-check=full --show-leak-kinds=all -s --trace-children=yes --trace-children-skip=/usr/bin/md5sum,/bin/sh --log-fd=9 ./view 9>&1 1>/dev/null | grep -e "ERROR SUMMARY: [1-9][0-9]*" | cat)
-	@if [ ! -z $$VAL2RES ]; then \
+	@VAL2RES=$$(echo "/app_shm" | valgrind --leak-check=full --show-leak-kinds=all -s --trace-children=yes --trace-children-skip=/usr/bin/md5sum,/bin/sh --log-fd=9 ./view 9>&1 1>/dev/null | cat); \
+	VAL2GREP=$$(echo "$$VAL2RES" | grep -e "ERROR SUMMARY: [1-9][0-9]*" | cat);\
+	if [ ! -z "$$VAL2GREP" ]; then \
 		tput setaf 1; \
 		echo -e "\n\nVALGRIND ENCOUNTERED AN ERROR IN VIEW\n"; \
-		cat $$VAL2RES; \
+		echo -e $$VAL2RES; \
 	else \
 		tput setaf 2; \
 		echo -e "\n\nVALGRIND VIEW TEST FINISHED SUCCESSFULLY\n"; \
