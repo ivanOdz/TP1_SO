@@ -14,7 +14,7 @@ testfiles:
 		ln -s file$$i link$${i}_6; \
 	done;
 
-analyze: clean pvs clean all valgrind compare
+analyze: pvs clean all valgrind compare
 
 app: app.c
 	gcc -Wall $< -g -o $@
@@ -25,32 +25,74 @@ view: view.c
 slave: slave.c
 	gcc -Wall $< -g -o $@
 
-pvs:
-	@echo -e "\n\nRUNNING PVS-STUDIO TEST\n\n\n"
-	make clean
-	pvs-studio-analyzer trace -- make
-	pvs-studio-analyzer analyze
-	plog-converter -a '64:1,2,3;GA:1,2,3;OP:1,2,3' -t tasklist -o report.tasks PVS-Studio.log
-	rm -f PVS-Studio.log
-	@echo -e "\n\n\nPVS-STUDIO TEST FINISHED\n"
+pvs: clean pvs_test
+
+pvs_test:
+	@tput setaf 4
+	@echo -e "\n\nRUNNING PVS-STUDIO TEST\n\n"
+	@tput sgr0
+	@pvs-studio-analyzer trace -- make
+	@pvs-studio-analyzer analyze
+	@rm -f strace_out
+	@plog-converter -a '64:1,2,3;GA:1,2,3;OP:1,2,3' -t tasklist -o report.tasks PVS-Studio.log
+	@rm -f PVS-Studio.log
+
+	@if [ -s "report.tasks" ]; then \
+		tput setaf 1; \
+		echo -e "\n\nPVS-STUDIO ENCOUNTERED AN ERROR\n"; \
+		cat report.tasks; \
+	else \
+		tput setaf 2; \
+		echo -e "\n\nPVS-STUDIO TEST FINISHED SUCCESSFULLY\n"; \
+	fi
+	@tput sgr0
 
 valgrind:
-	@echo -e "\n\nRUNNING VALGRIND TEST\n\n\n"
-	valgrind --leak-check=full --show-leak-kinds=all -s --trace-children=yes --trace-children-skip=/usr/bin/md5sum,/bin/sh ./app ./files/*
-	./app ./files/*&
-	valgrind --leak-check=full --show-leak-kinds=all -s --trace-children=yes --trace-children-skip=/usr/bin/md5sum,/bin/sh --log-fd=9 ./view /app_shm 9>&1 1>/dev/null
-	@echo -e "\n\n\nVALGRIND TEST FINISHED\n"
+	@tput setaf 4
+	@echo -e "\nRUNNING VALGRIND TEST FOR APP/SLAVE"
+	@tput sgr0
+	@VAL1RES=$$(valgrind --leak-check=full --show-leak-kinds=all -s --trace-children=yes --trace-children-skip=/usr/bin/md5sum,/bin/sh --log-fd=9 ./app ./files/* 9>&1 1>/dev/null | grep -e "ERROR SUMMARY: [1-9][0-9]*" | cat)
+	@if [ ! -z $$VAL1RES ]; then \
+		tput setaf 1; \
+		echo -e "\n\nVALGRIND ENCOUNTERED AN ERROR IN APP-SLAVE\n"; \
+		cat $$VAL1RES; \
+	else \
+		tput setaf 2; \
+		echo -e "\n\nVALGRIND APP-SLAVE TEST FINISHED SUCCESSFULLY\n"; \
+	fi
+	@tput setaf 4
+	@echo -e "\nRUNNING VALGRIND TEST FOR VIEW"
+	@tput sgr0	
+	@./app ./files/* > /dev/null &
+	@VAL2RES=$$(echo "/app_shm" | valgrind --leak-check=full --show-leak-kinds=all -s --trace-children=yes --trace-children-skip=/usr/bin/md5sum,/bin/sh --log-fd=9 ./view 9>&1 1>/dev/null | grep -e "ERROR SUMMARY: [1-9][0-9]*" | cat)
+	@if [ ! -z $$VAL2RES ]; then \
+		tput setaf 1; \
+		echo -e "\n\nVALGRIND ENCOUNTERED AN ERROR IN VIEW\n"; \
+		cat $$VAL2RES; \
+	else \
+		tput setaf 2; \
+		echo -e "\n\nVALGRIND VIEW TEST FINISHED SUCCESSFULLY\n"; \
+	fi
+	@tput sgr0	
 
 compare:
-	@echo -e "\n\nRUNNING DIFF\n\n\n"
-	./app files/*
-	md5sum files/* | while read md5 file; do echo "$$file - $$md5"; done | sort > outputReal.txt
-	diff <(sort results.txt | sed 's/ - [0-9]\+$$//g')  outputReal.txt
-	rm -f outputReal.txt
-	@echo -e "\n\n\nDIFF ENDED\n\n"
+	@tput setaf 4
+	@echo -e "\nRUNNING DIFF"
+	@tput sgr0	
+	@DIFFRES=$$(diff <(./app files/* | ./view | sort | sed 's/ - [0-9]\+$$//g')  <(md5sum files/* | while read md5 file; do echo "$$file - $$md5"; done | sort) | cat);\
+	if [ ! -z "$$DIFFRES" ]; then \
+		tput setaf 1; \
+		echo -e "\n\nVALGRIND ENCOUNTERED AN ERROR IN VIEW\n"; \
+		echo -e "$$DIFFRES"; \
+	else \
+		tput setaf 2; \
+		echo -e "\n\nVALGRIND VIEW TEST FINISHED SUCCESSFULLY\n"; \
+	fi
+	@tput sgr0	
+	
 clean:
 	rm -f app view slave
 
-.PHONY: all clean pvs valgrind compare testfiles
+.PHONY: all clean pvs pvs_test valgrind compare testfiles
 
 
