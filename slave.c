@@ -31,7 +31,6 @@ int main(int argc, char * argv[]) {
     char commandBuffer[DEFAULT_BUFFER_SIZE];
 
     int status = EXIT_FAILURE;
-    int pendingReadBufferBytes = 0;
     int writeBufferBytes = 0;
     int myPid = getpid();
 
