@@ -48,7 +48,7 @@ int main(int argc, char * argv[]) {
             exit(ORDINARY_ERROR);
         }
         if (readBuffer[readBytes - 1] == '\n') {
-            readBuffer[--pendingReadBufferBytes] = '\0';
+            readBuffer[--readBytes] = '\0';
         }
         size_t offset = 0;
 
