@@ -42,7 +42,7 @@
 #define ERESULTFILE             "Error writing results to file"
 
 
-size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex);
+size_t shmWrite(char * shmBuffer, char * str, sem_t * dataPending);
 char * createSHM(char * name, size_t size);
 void sendSlaveTask(char * path, int fd);
 void createSlaves(int amount);
@@ -68,9 +68,9 @@ int main(int argc, char * argv[]) {
     
     shmAddr = createSHM(SHMNAME, SHMSIZE);
     char * shmBuffer = shmAddr + sizeof(sem_t);
-    sem_t * mutex = (sem_t *) shmAddr;
+    sem_t * dataPending = (sem_t *) shmAddr;
     size_t offset = 0;
-    if (sem_init(mutex, 1, 0)){
+    if (sem_init(dataPending, 1, 0)){
         errorAbort(ESHM);
     }   
     
@@ -134,7 +134,7 @@ int main(int argc, char * argv[]) {
 
                 size_t written = 0;
                 while (written < (size_t)bytesread) {
-                    int temp = shmWrite(shmBuffer + offset, resultBuffer + written, mutex);
+                    int temp = shmWrite(shmBuffer + offset, resultBuffer + written, dataPending);
                     written += temp + 1;
                     filesProcessed++;
                     offset += temp;
@@ -159,10 +159,10 @@ int main(int argc, char * argv[]) {
     Exit(EXIT_SUCCESS);
 }
 
-size_t shmWrite(char * shmBuffer, char * str, sem_t * mutex) {
+size_t shmWrite(char * shmBuffer, char * str, sem_t * dataPending) {
     size_t len = strlen(str);
     memcpy(shmBuffer, str, len);
-    sem_post(mutex);
+    sem_post(dataPending);
     return len;
 }
 

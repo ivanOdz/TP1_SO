@@ -38,12 +38,12 @@ int main(int argc, char * argv[]) {
         sharedMem = openShm(sharedMemHandle);
         free(sharedMemHandle);
     }
-    sem_t * mutex = (sem_t *) sharedMem;
+    sem_t * dataPending = (sem_t *) sharedMem;
     char * resultBuffer = sharedMem + sizeof(sem_t);
     size_t offset = 0;
 
     do {
-        sem_wait(mutex);
+        sem_wait(dataPending);
         int lineLength = getLineLen(resultBuffer + offset);
         fwrite(resultBuffer + offset, lineLength, 1, stdout);
         offset += lineLength;
