@@ -33,7 +33,7 @@ int main(int argc, char * argv[]) {
             perror(SHM_ERROR_MESSAGE_1);
             exit(ORDINARY_ERROR);
         }
-        read(fileno(stdin), sharedMemHandle, bufferSize);
+        read(STDIN_FILENO, sharedMemHandle, bufferSize);
         sharedMemHandle[getLineLen(sharedMemHandle)] = 0;
         sharedMem = openShm(sharedMemHandle);
         free(sharedMemHandle);
