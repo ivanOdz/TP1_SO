@@ -35,7 +35,7 @@ int main(int argc, char * argv[]) {
     int myPid = getpid();
 
     FILE * result;
-
+    int fifo = open("/fifo", O_WRONLY);
     do {
         int readBytes = read(STDIN_FILENO, readBuffer, sizeof(readBuffer));
 
@@ -63,6 +63,7 @@ int main(int argc, char * argv[]) {
             fgets(algorithmResult, HA_RESULT_SIZE, result);
             writeBufferBytes = snprintf(writeBuffer, DEFAULT_BUFFER_SIZE, "%s - %.*s - %d\n", pathOfFileForHA, HA_RESULT_SIZE, algorithmResult, myPid);
             write(STDOUT_FILENO, writeBuffer, writeBufferBytes + 1);
+            write(fifo, writeBuffer, writeBufferBytes + 1);
             offset += strlen(pathOfFileForHA) + 1;
             pclose(result);
         }

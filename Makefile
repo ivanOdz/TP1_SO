@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-all: app view slave
+all: app view slave view2
 
 testfiles:
 	mkdir -p files
@@ -20,6 +20,9 @@ app: app.c
 	gcc -Wall $< -g -o $@
 
 view: view.c
+	gcc -Wall $< -g -o $@
+
+view2: view2.c
 	gcc -Wall $< -g -o $@
 
 slave: slave.c

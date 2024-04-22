@@ -17,6 +17,7 @@
 #define SLAVEPROCESS            "./slave"
 #define RESULTFILE              "results.txt"
 #define SHMNAME                 "/app_shm"
+#define FIFO_NAME               "/fifo"
 #define SHMSIZE                 2000000
 #define SLAVESQTY               8
 #define INITIAL_TASKS           3
@@ -73,6 +74,9 @@ int main(int argc, char * argv[]) {
     if (sem_init(dataPending, 1, 0)){
         errorAbort(ESHM);
     }   
+    if (mkfifo(FIFO_NAME, 0666)){
+        errorAbort("FIFO");
+    } 
     
     printf("%s\n", SHMNAME);
     sleep(SHM_WAIT_TIME); 
@@ -273,6 +277,7 @@ void Exit(int returnValue){
         sem_destroy((sem_t *)shmAddr);
         shm_unlink(SHMNAME);
     }
+    unlink(FIFO_NAME);
     for (int i = 0 ; i < SLAVESQTY; i++) {
         killSlave(i);
     }
